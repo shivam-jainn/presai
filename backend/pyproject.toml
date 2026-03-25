@@ -4,4 +4,11 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.135.2",
+    "numpy>=2.4.3",
+    "pydantic>=2.12.5",
+    "python-pptx>=1.0.2",
+    "scikit-learn>=1.8.0",
+    "uvicorn>=0.42.0",
+]
