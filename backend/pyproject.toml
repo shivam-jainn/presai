@@ -6,7 +6,10 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.135.2",
+    "livekit-agents[groq,openai]~=1.4",
+    "livekit-api>=1.1.0",
     "numpy>=2.4.3",
+    "openai>=2.29.0",
     "pydantic>=2.12.5",
     "python-pptx>=1.0.2",
     "scikit-learn>=1.8.0",
