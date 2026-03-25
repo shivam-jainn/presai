@@ -1,9 +1,14 @@
-import Landing from './components/Landing'
+import Landing from './components/pages/Landing'
+import Slides from './components/pages/Slides'
 
 function App() {
+  const isSignedIn = true
+
   return (
     <div>
-      <Landing />
+      {
+        isSignedIn ? <Slides /> : <Landing />
+      }
     </div>
   )
 }
