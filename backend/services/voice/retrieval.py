@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from config.llm import LLMConfig
+from config import config
 from utils.embeddings import EmbeddingService
 from utils.logger import logger
 from utils.vectorstore import vector_store
@@ -21,12 +21,10 @@ _sessions: dict[str, dict[str, Any]] = {}
 
 def _get_llm_client():
     from openai import OpenAI
-    cfg = LLMConfig
-    kwargs: dict[str, Any] = {"api_key": cfg.API_KEY or "nokey"}
-    if cfg.BASE_URL:
-        kwargs["base_url"] = cfg.BASE_URL
-    elif cfg.PROVIDER == "groq":
-        kwargs["base_url"] = "https://api.groq.com/openai/v1"
+    llm_cfg = config.llm_config
+    kwargs: dict[str, Any] = {"api_key": llm_cfg.get("api_key") or "nokey"}
+    if llm_cfg.get("base_url"):
+        kwargs["base_url"] = llm_cfg["base_url"]
     return OpenAI(**kwargs)
 
 
@@ -38,16 +36,16 @@ def _llm_json(system: str, user: str, *, max_tokens: int = 32) -> dict[str, Any]
     """
     try:
         client = _get_llm_client()
-        logger.info("LLM call: model=%s", LLMConfig.MODEL)
+        logger.info("LLM call: model=%s", config.LLM_MODEL_NAME)
         
         resp = client.chat.completions.create(
-            model=LLMConfig.MODEL,
+            model=config.LLM_MODEL_NAME,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user",   "content": user},
             ],
             max_tokens=max_tokens,
-            temperature=0.0,
+            temperature=config.LLM_TEMPERATURE,
             response_format={"type": "json_object"},
         )
         raw = (resp.choices[0].message.content or "").strip()

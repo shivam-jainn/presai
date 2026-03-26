@@ -15,6 +15,7 @@ export default function ControlPill() {
     currentSlide,
     totalSlides,
     setCurrentSlide,
+    isPresentationReady,
   } = useSlideStore();
 
   const { isConnecting, voiceError, voiceStatus, start } = useLiveKitVoice();
@@ -32,6 +33,9 @@ export default function ControlPill() {
   const showListening = isFileUploaded && !isIngesting;
   const isVoiceActive = isListening || isVoiceThinking;
 
+  // Force visibility during ingestion or until presentation is ready
+  const shouldForceVisibility = isIngesting || !isPresentationReady;
+
   const statusText = useMemo(() => {
     if (!showListening) return "Upload file";
     if (isConnecting) return "Connecting…";
@@ -41,18 +45,18 @@ export default function ControlPill() {
     return "Ready";
   }, [showListening, isConnecting, isListening, isVoiceThinking, voiceStatus]);
 
-  // Auto-show pill whenever voice is active.
+  // Auto-show pill whenever voice is active or during ingestion/until ready.
   useEffect(() => {
-    if (isVoiceActive) setIsVisible(true);
-  }, [isVoiceActive]);
+    if (isVoiceActive || shouldForceVisibility) setIsVisible(true);
+  }, [isVoiceActive, shouldForceVisibility]);
 
   const scheduleHide = useCallback(() => {
-    if (isVoiceActive) return;
+    if (isVoiceActive || shouldForceVisibility) return;
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
     hideTimeoutRef.current = setTimeout(() => {
-      if (!isHovered && !isVoiceActive) setIsVisible(false);
+      if (!isHovered && !isVoiceActive && !shouldForceVisibility) setIsVisible(false);
     }, 300);
-  }, [isHovered, isVoiceActive]);
+  }, [isHovered, isVoiceActive, shouldForceVisibility]);
 
   const cancelHide = useCallback(() => {
     if (hideTimeoutRef.current) {
@@ -120,8 +124,8 @@ export default function ControlPill() {
       {/* Main pill container */}
       <motion.div
         className="fixed bottom-0 left-0 w-full z-50 flex justify-center items-center pb-8 px-4 pointer-events-none"
-        initial={{ y: 0 }}
-        animate={{ y: isVisible ? 0 : 120 }}
+        initial={{ y: shouldForceVisibility ? 0 : 120 }}
+        animate={{ y: (isVisible || shouldForceVisibility) ? 0 : 120 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         onMouseEnter={handlePillEnter}
         onMouseLeave={handlePillLeave}

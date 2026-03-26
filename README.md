@@ -16,12 +16,18 @@ Navigate slides using voice commands. Built with FastAPI + React + LiveKit.
 # 1. Start infrastructure (Qdrant + LiveKit)
 make infra-up
 
-# 2. Backend setup & run
+# 2. Backend setup & run (with automatic health checks)
 cd backend
 cp .env.example .env
 # Add GROQ_API_KEY (get free key at https://console.groq.com/keys)
 cd ..
 make backend-api
+
+# The startup script will automatically:
+# - Load your .env configuration
+# - Check all service connections
+# - Show you a detailed health report
+# - Start the server if everything is healthy
 
 # 3. Frontend (new terminal)
 make frontend
@@ -62,19 +68,64 @@ Open **http://localhost:5173**
 
 ## Troubleshooting
 
+### Health Check System
+
+PresAI has a built-in health check system that runs automatically on startup:
+
 ```bash
-# Check running services
-docker ps
+# Start backend with health checks
+make backend-api
 
-# View all logs
-make infra-logs
-
-# Restart everything
-make infra-down && make infra-up
-
-# Free up ports
-lsof -ti:8000 | xargs kill -9
+# Or run directly
+cd backend
+python startup.py
 ```
+
+**What it checks:**
+- ✅ Qdrant vector database connection
+- ✅ Ollama (if using local embeddings)
+- ✅ Groq API (if configured)
+- ✅ Deepgram API (if configured)
+- ✅ LiveKit server connectivity
+- ✅ File storage path accessibility
+
+**Web endpoints:**
+- **Basic**: http://localhost:8000/health
+- **Detailed**: http://localhost:8000/health/detailed
+
+**Test script:**
+```bash
+cd backend
+uv run python test_health.py
+```
+
+### Common Issues
+
+#### Qdrant Connection Failed
+```bash
+# Check if Qdrant is running
+docker ps | grep vectordb
+
+# Restart if needed
+make infra-down && make infra-up
+```
+
+#### Ollama Not Responding
+```bash
+# Start Ollama
+ollama serve
+
+# Pull required model
+ollama pull nomic-embed-text
+
+# Test connection
+curl http://localhost:11434/api/tags
+```
+
+#### Groq/Deepgram API Errors
+- Verify API keys in `.env` are correct
+- Check you haven't exceeded free tier limits
+- Test keys with the `/health/detailed` endpoint
 
 ## Links
 
