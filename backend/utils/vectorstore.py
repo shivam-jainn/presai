@@ -1,10 +1,17 @@
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict, Any, cast
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import (
+    Condition,
+    Distance,
+    VectorParams,
+    PointStruct,
+    Filter,
+    FieldCondition,
+    MatchValue,
+)
 from utils.logger import logger
 from config.database import DatabaseConfig
-import json
 
 class VectorStore:
     def __init__(self):
@@ -25,12 +32,17 @@ class VectorStore:
                 try:
                     collection_info = self.client.get_collection(self.collection_name)
                     # Handle both dict-style and object-style access
-                    if hasattr(collection_info, 'vectors_config'):
-                        vectors_config = collection_info.vectors_config
+                    vectors_config = getattr(collection_info, "vectors_config", None)
+                    if vectors_config is not None:
                         if hasattr(vectors_config, 'size'):
                             current_size = vectors_config.size
                         elif isinstance(vectors_config, dict) and 'size' in vectors_config:
-                            current_size = vectors_config['size']
+                            vector_config_dict = cast(Dict[str, Any], vectors_config)
+                            raw_size = vector_config_dict.get("size")
+                            if isinstance(raw_size, (int, float)):
+                                current_size = int(raw_size)
+                            else:
+                                current_size = None
                         else:
                             current_size = None
                     else:
@@ -59,7 +71,7 @@ class VectorStore:
         if not vectors:
             return
 
-        points = []
+        points: List[PointStruct] = []
         for i, vector in enumerate(vectors):
             point_id = ids[i] if i < len(ids) else str(uuid.uuid4())
             points.append(PointStruct(
@@ -74,5 +86,60 @@ class VectorStore:
             points=points
         )
         logger.info("Upsert successful.")
+
+    def search_similar(
+        self,
+        query_vector: List[float],
+        limit: int = 5,
+        filename: str | None = None,
+        session_id: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        if not query_vector:
+            return []
+
+        search_filter = None
+        filter_conditions: List[Condition] = []
+        if filename:
+            filter_conditions.append(
+                FieldCondition(
+                    key="filename",
+                    match=MatchValue(value=filename),
+                )
+            )
+        if session_id:
+            filter_conditions.append(
+                FieldCondition(
+                    key="session_id",
+                    match=MatchValue(value=session_id),
+                )
+            )
+
+        if filter_conditions:
+            search_filter = Filter(must=filter_conditions)
+
+        results = self.client.search(  # type: ignore[attr-defined]
+            collection_name=self.collection_name,
+            query_vector=query_vector,
+            query_filter=search_filter,
+            limit=limit,
+            with_payload=True,
+        )
+
+        formatted_results: List[Dict[str, Any]] = []
+        for result in cast(List[Any], results):
+            payload = dict(getattr(result, "payload", {}) or {})
+            formatted_results.append(
+                {
+                    "score": float(getattr(result, "score", 0.0)),
+                    "text": payload.get("text", ""),
+                    "slide_number": payload.get("slide_number") or payload.get("slide_id"),
+                    "slide_id": payload.get("slide_id"),
+                    "filename": payload.get("filename"),
+                    "session_id": payload.get("session_id"),
+                    "source_file_path": payload.get("source_file_path"),
+                }
+            )
+
+        return formatted_results
 
 vector_store = VectorStore()

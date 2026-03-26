@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from fastapi import UploadFile
 from utils.logger import logger
 from utils.storage import storage
@@ -11,14 +11,15 @@ from services.ingestion.cleaner import cleaner
 from config.misc import MiscConfig
 
 class IngestionPipeline:
-    def __init__(self, batch_size: int = None):
+    def __init__(self, batch_size: Optional[int] = None):
         config = MiscConfig()
         self.embedding_service = EmbeddingService()
         self.batch_size = batch_size or config.BATCH_SIZE
         logger.info(f"IngestionPipeline initialized with batch size {self.batch_size}")
 
-    async def ingest(self, upload_file: UploadFile) -> Dict[str, Any]:
-        filename = upload_file.filename
+    async def ingest(self, upload_file: UploadFile, ingestion_session_id: Optional[str] = None) -> Dict[str, Any]:
+        filename = upload_file.filename or "uploaded.pptx"
+        session_id = ingestion_session_id or str(uuid.uuid4())
         file_path = None
         
         try:
@@ -55,7 +56,17 @@ class IngestionPipeline:
             # 5. Store in Qdrant
             logger.info("Step 5: Storing embeddings in Qdrant...")
             ids = [str(uuid.uuid4()) for _ in range(len(all_vectors))]
-            payloads = [{"text": chunk["text"], "slide_id": str(chunk["page"])} for chunk in clean_chunks]
+            payloads: List[Dict[str, Any]] = [
+                {
+                    "text": chunk["text"],
+                    "slide_id": str(chunk["page"]),
+                    "slide_number": int(chunk["page"]),
+                    "filename": filename,
+                    "session_id": session_id,
+                    "source_file_path": file_path,
+                }
+                for chunk in clean_chunks
+            ]
             
             vector_store.upsert_embeddings(ids, all_vectors, payloads)
             
@@ -73,6 +84,7 @@ class IngestionPipeline:
                 "status": "success",
                 "chunks_stored": len(all_vectors),
                 "filename": filename,
+                "ingestion_session_id": session_id,
                 "slides": slide_contents,
                 "total_slides": len(slide_contents)  # Actual number of unique slides
             }
