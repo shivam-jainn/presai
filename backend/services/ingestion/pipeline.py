@@ -42,35 +42,52 @@ class IngestionPipeline:
             
             # 4. Embed (Batching and Parallelism)
             logger.info("Step 4: Embedding text chunks...")
-            # Extract text for embedding
-            texts_for_embedding = [chunk["text"] for chunk in clean_chunks]
-            batches = [texts_for_embedding[i:i + self.batch_size] for i in range(0, len(texts_for_embedding), self.batch_size)]
             
-            # Using asyncio.to_thread for OpenAIEmbeddings since it's blocking in LangChain
-            tasks = [asyncio.to_thread(self.embedding_service.embed, batch) for batch in batches]
-            logger.info(f"Running {len(tasks)} parallel embedding batch tasks.")
+            # Group all text elements by slide to create one vector per slide
+            slide_texts: Dict[int, str] = {}
+            for chunk in clean_chunks:
+                page_num = chunk.get("page", 1)
+                if page_num not in slide_texts:
+                    slide_texts[page_num] = ""
+                # Concatenate all text from this slide
+                slide_texts[page_num] += (" " + chunk["text"])
             
-            nested_vectors = await asyncio.gather(*tasks)
-            all_vectors = [vec for batch in nested_vectors for vec in batch]
+            # Clean up the concatenated text
+            slide_texts = {page: text.strip() for page, text in slide_texts.items() if text.strip()}
             
-            # 5. Store in Qdrant
-            logger.info("Step 5: Storing embeddings in Qdrant...")
+            # Prepare texts for embedding (one per slide)
+            texts_for_embedding = [slide_texts[page] for page in sorted(slide_texts.keys())]
+            logger.info(f"Creating {len(texts_for_embedding)} slide embeddings (one per slide)")
+            
+            # Embed all slide texts
+            all_vectors = await asyncio.to_thread(self.embedding_service.embed, texts_for_embedding)
+            
+            # 5. Store in Qdrant (one entry per slide)
+            logger.info("Step 5: Storing slide embeddings in Qdrant...")
             ids = [str(uuid.uuid4()) for _ in range(len(all_vectors))]
-            payloads: List[Dict[str, Any]] = [
-                {
-                    "text": chunk["text"],
-                    "slide_id": str(chunk["page"]),
-                    "slide_number": int(chunk["page"]),
+            payloads: List[Dict[str, Any]] = []
+            for page_num in sorted(slide_texts.keys()):
+                payloads.append({
+                    "text": slide_texts[page_num],
+                    "slide_number": page_num,
+                    "slide_heading": clean_chunks[0].get("heading", "") if clean_chunks else "",
                     "filename": filename,
                     "session_id": session_id,
                     "source_file_path": file_path,
-                }
-                for chunk in clean_chunks
-            ]
+                })
+            
+            logger.info("="*80)
+            logger.info("📝 DATA BEING STORED IN QDRANT:")
+            logger.info("="*80)
+            for i, payload in enumerate(payloads, 1):
+                logger.info(f"\n[Chunk {i}]")
+                logger.info(f"   Slide Number: {payload['slide_number']}")
+                logger.info(f"   Text Content: {payload['text']}")
+                logger.info(f"   Filename: {payload['filename']}")
+                logger.info(f"   Session ID: {payload['session_id']}")
+            logger.info("="*80)
             
             vector_store.upsert_embeddings(ids, all_vectors, payloads)
-            
-            logger.info(f"--- Pipeline completed for {filename}. Stored {len(all_vectors)} chunks. ---")
             
             # Organize chunks by slide page number for frontend display
             slide_contents: Dict[int, List[str]] = {}
@@ -79,6 +96,10 @@ class IngestionPipeline:
                 if page_num not in slide_contents:
                     slide_contents[page_num] = []
                 slide_contents[page_num].append(chunk["text"])
+            
+            logger.info(f"--- Pipeline completed for {filename}. Stored {len(all_vectors)} chunks. ---")
+            logger.info(f"   Total unique slides: {len(slide_contents)}")
+            logger.info(f"   Slide numbers: {sorted(slide_contents.keys())}")
             
             return {
                 "status": "success",

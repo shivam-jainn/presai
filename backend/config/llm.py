@@ -6,10 +6,13 @@ load_dotenv()
 class LLMConfig:
     PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()
     MODEL = os.getenv("LLM_MODEL", "gpt-4")
-    API_KEY = os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+    API_KEY = os.getenv(
+        "LLM_API_KEY",
+        os.getenv("OPENAI_API_KEY", os.getenv("GROQ_API_KEY", ""))
+    )
     BASE_URL = os.getenv("LLM_BASE_URL", "")
-    TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
-    MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1000"))
+    TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.0"))
+    MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "256"))
     
     # Provider-specific defaults
     @property

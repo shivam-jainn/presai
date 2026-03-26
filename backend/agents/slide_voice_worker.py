@@ -1,60 +1,39 @@
-import sys
+from __future__ import annotations
+
 import asyncio
 import json
+import sys
+import time
 from pathlib import Path
 from typing import Any
-import time
 
 from livekit import agents, rtc
-from livekit.plugins import deepgram, groq
+from livekit.plugins import deepgram
 
-# Allow running this file directly: `python agents/slide_voice_worker.py dev`
+# Allow running this file directly without installing the package.
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from config.voice import VoiceConfig
+from services.events import EventType, emit_voice_event
 from services.voice.retrieval import run_voice_slide_query
-from services.events import event_manager, EventType, emit_voice_event
 from utils.logger import logger
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Constants
+# ──────────────────────────────────────────────────────────────────────────────
+
 RECOMMENDATION_TOPIC = "presai.slide.recommendation"
-DEBUG_LOG_PATH = "/Users/shivamjain/Development/presai/.cursor/debug-ec09e7.log"
 
 
-def _dbg(run_id: str, hypothesis_id: str, location: str, message: str, data: dict[str, Any] | None = None) -> None:
-    try:
-        payload = {
-            "sessionId": "ec09e7",
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time.time() * 1000),
-        }
-        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=True) + "\n")
-    except Exception:
-        # Never break the voice loop because of debug logging.
-        pass
-
-
-class PresAIAgent(agents.Agent):
-    def __init__(self) -> None:
-        super().__init__(
-            instructions=(
-                "You are PresAI voice conductor. Keep responses short and natural. "
-                "If user asks navigation commands, confirm quickly and continue."
-            )
-        )
-
+# ──────────────────────────────────────────────────────────────────────────────
+# Navigation intent parser
+# ──────────────────────────────────────────────────────────────────────────────
 
 def _safe_int(value: object) -> int | None:
     try:
-        if value is None:
-            return None
-        if isinstance(value, bool):
+        if value is None or isinstance(value, bool):
             return None
         return int(str(value).strip())
     except Exception:
@@ -63,153 +42,137 @@ def _safe_int(value: object) -> int | None:
 
 def _parse_navigation_intent(transcript: str) -> dict[str, Any] | None:
     """
-    Parse lightweight navigation intents from raw transcript.
-    Returns a payload fragment (type=nav) or None.
+    Parse lightweight navigation intents from a raw transcript string.
+
+    Returns a payload fragment with ``type="nav"`` or ``None`` when no
+    navigation intent is detected.
     """
     text = " ".join(transcript.strip().lower().split())
     if not text:
         return None
 
-    # next / previous
+    # Direct next / previous commands.
     if text in {"next", "next slide", "forward", "go next", "go forward"}:
         return {"type": "nav", "action": "next"}
-    if text in {
-        "previous",
-        "prev",
-        "previous slide",
-        "prev slide",
-        "back",
-        "go back",
-        "go previous",
-    }:
+    if text in {"previous", "prev", "previous slide", "prev slide",
+                "back", "go back", "go previous"}:
         return {"type": "nav", "action": "prev"}
 
-    # goto slide N patterns
-    # Examples: "slide 4", "go to slide 4", "go to 4", "jump to slide 10"
+    # "slide N" / "go to slide N" / "jump to N" patterns.
     tokens = text.replace("#", " ").replace(",", " ").split()
-    if not tokens:
-        return None
-
-    # Find last integer token as the target slide number.
-    maybe_numbers = [_safe_int(tok) for tok in tokens]
-    numbers = [n for n in maybe_numbers if isinstance(n, int)]
+    numbers = [n for n in (_safe_int(t) for t in tokens) if isinstance(n, int)]
     if not numbers:
         return None
 
-    prefixes = {"slide", "slides", "goto", "go", "jump", "to"}
-    if any(tok in prefixes for tok in tokens) or text.startswith("slide "):
-        target_slide_number = max(numbers[-1], 1)
+    nav_keywords = {"slide", "slides", "goto", "go", "jump", "to"}
+    if any(tok in nav_keywords for tok in tokens) or text.startswith("slide "):
+        target = max(numbers[-1], 1)
         return {
             "type": "nav",
             "action": "goto",
-            "target_slide_number": target_slide_number,
-            "target_slide_index": target_slide_number - 1,
+            "target_slide_number": target,
+            "target_slide_index": target - 1,
         }
 
     return None
 
 
+class PresAIAgent(agents.Agent):
+    def __init__(self) -> None:
+        super().__init__(
+            instructions=(
+                "You are the PresAI voice conductor. "
+                "Keep responses short and natural. "
+                "Confirm navigation commands quickly and continue."
+            )
+        )
+
+
 async def entrypoint(ctx: agents.JobContext) -> None:
     run_id = f"worker-{int(time.time() * 1000)}"
-    # Extract session_id from room name or participant attributes
-    session_id = ctx.room.name.replace(f"{VoiceConfig.LIVEKIT_ROOM_PREFIX}-", "") if ctx.room and ctx.room.name else "unknown"
-    
-    _dbg(
-        run_id,
-        "H6",
-        "slide_voice_worker.py:entrypoint",
-        "Worker entrypoint starting",
-        {"room": getattr(ctx, "room", None) and getattr(ctx.room, "name", None), "session_id": session_id},
-    )
+
+    # Derive the session ID from the room name (matches what the token endpoint
+    # encodes: presai-voice-{session_id}).
+    room_name = ctx.room.name if ctx.room else ""
+    session_id = room_name.replace(f"{VoiceConfig.LIVEKIT_ROOM_PREFIX}-", "", 1) or "unknown"
+
+    logger.info("Worker starting | run_id=%s room=%s session_id=%s", run_id, room_name, session_id)
+
     await ctx.connect(auto_subscribe=agents.AutoSubscribe.AUDIO_ONLY)
-    logger.info("Agent worker connected to room=%s", ctx.room.name)
-    _dbg(run_id, "H6", "slide_voice_worker.py:entrypoint", "Connected to room", {"room": ctx.room.name})
-    
-    # Emit voice connected event
+    logger.info("Worker connected | room=%s", ctx.room.name)
+
+    # Notify the SSE bus that the voice assistant is connected.
     try:
         await emit_voice_event(
             EventType.VOICE_CONNECTED,
             session_id,
-            {"room_name": ctx.room.name, "status": "connected"}
+            {"room_name": ctx.room.name, "status": "connected"},
         )
     except Exception:
-        pass  # Don't fail on event emission
+        pass
 
-    # Room-level instrumentation to prove we are actually receiving/subscribing audio.
-    def _on_track_subscribed(track: rtc.Track, pub: rtc.RemoteTrackPublication, participant: rtc.RemoteParticipant) -> None:
-        try:
-            _dbg(
-                run_id,
-                "H7",
-                "slide_voice_worker.py:room.track_subscribed",
-                "Track subscribed",
-                {
-                    "participant_identity": participant.identity,
-                    "track_kind": str(getattr(track, "kind", "")),
-                    "source": str(getattr(pub, "source", "")),
-                    "sid": str(getattr(pub, "sid", "")),
-                    "mime": str(getattr(pub, "mime_type", "")),
-                },
-            )
-        except Exception:
-            pass
+    participant: rtc.RemoteParticipant | None = None
 
-    def _on_track_subscription_failed(sid: str, participant: rtc.RemoteParticipant) -> None:
-        _dbg(
-            run_id,
-            "H7",
-            "slide_voice_worker.py:room.track_subscription_failed",
-            "Track subscription failed",
-            {"sid": sid, "participant_identity": participant.identity},
+    def _on_track_subscribed(
+        track: rtc.Track,
+        pub: rtc.RemoteTrackPublication,
+        remote: rtc.RemoteParticipant,
+    ) -> None:
+        logger.info(
+            "🎵 Track subscribed | kind=%s mime=%s participant=%s track_sid=%s",
+            track.kind, pub.mime_type, remote.identity, track.sid,
+        )
+        logger.debug(
+            "   Track details: muted=%s attached=%s",
+            track.muted, pub.is_attached()
+        )
+
+    def _on_track_subscription_failed(sid: str, remote: rtc.RemoteParticipant) -> None:
+        logger.error("Track subscription failed | sid=%s participant=%s", sid, remote.identity)
+
+    def _on_participant_connected(remote: rtc.RemoteParticipant) -> None:
+        nonlocal participant
+        logger.info("👤 Participant connected | identity=%s sid=%s", remote.identity, remote.sid)
+        logger.debug("   Attributes: %s", remote.attributes)
+        participant = remote
+
+    def _on_participant_disconnected(remote: rtc.RemoteParticipant) -> None:
+        logger.info(
+            "Participant disconnected | identity=%s (worker remains alive for reconnection)",
+            remote.identity,
         )
 
     ctx.room.on("track_subscribed", _on_track_subscribed)
     ctx.room.on("track_subscription_failed", _on_track_subscription_failed)
+    ctx.room.on("participant_connected", _on_participant_connected)
+    ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
     participant = await ctx.wait_for_participant()
-    logger.info("Participant joined identity=%s", participant.identity)
-    _dbg(
-        run_id,
-        "H6",
-        "slide_voice_worker.py:entrypoint",
-        "Participant joined",
-        {"identity": participant.identity, "attributes": participant.attributes or {}},
-    )
+    logger.info("✅ Participant joined | identity=%s", participant.identity)
 
-    # Monotonic, per-room counter to correlate turn lifecycle.
-    # We keep latest-per-identity to drop stale/out-of-order publishes.
+    # ── Turn tracking ────────────────────────────────────────────────────────
+
     turn_counter = 0
-    latest_turn_id_by_identity: dict[str, int] = {}
+    # Maps participant identity → latest turn_id so stale tasks are dropped.
+    latest_turn_id: dict[str, int] = {}
 
-    # Use Deepgram plugin directly for STT (avoids LiveKit inference authentication)
-    # This uses your DEEPGRAM_API_KEY directly
-    # Note: Using Nova-3 model as Flux requires v2 endpoint which isn't supported in current LiveKit plugin
-    stt_plugin = deepgram.STT(
-        model="nova-3",
-        language="en",
-    )
-    
+    stt_plugin = deepgram.STT(model="nova-3", language="en")
+    logger.info("🎙️ STT plugin initialized | model=deepgram/nova-3 language=en")
+
     session: agents.AgentSession[Any] = agents.AgentSession(
         stt=stt_plugin,
-        # Slide navigation is implemented via `run_voice_slide_query()` + data
-        # publishing in `publish_recommendation()`. LLM/TTS are not required.
-        # Keeping this STT-only prevents startup crashes when OPENAI_API_KEY
-        # (or other LLM providers) are not configured.
-        turn_handling={
-            "turn_detection": "vad",
-            "endpointing": {"mode": "dynamic", "min_delay": 0.35, "max_delay": 2.0},
-            "interruption": {
-                "enabled": True,
-                "mode": "adaptive",
-                "min_duration": 0.2,
-                "min_words": 1,
-                "resume_false_interruption": True,
-                "false_interruption_timeout": 1.5,
-            },
-        },
-        # Avoid any preemptive generation that would require an LLM.
+        # STT-only mode — no LLM or TTS required.
         preemptive_generation=False,
     )
+    logger.debug("   AgentSession created | preemptive_generation=False")
+
+    async def _publish(target: rtc.RemoteParticipant, payload: dict[str, Any]) -> None:
+        """Publish a JSON payload to a single participant on the recommendation topic."""
+        await ctx.room.local_participant.publish_data(
+            json.dumps(payload),
+            topic=RECOMMENDATION_TOPIC,
+            destination_identities=[target.identity],
+        )
 
     async def publish_recommendation(
         target: rtc.RemoteParticipant,
@@ -217,92 +180,66 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         *,
         turn_id: int,
     ) -> None:
-        attributes = target.attributes or {}
-        filename = attributes.get("filename")
-        session_id = attributes.get("session_id") or None
+        attrs = target.attributes or {}
+        filename = attrs.get("filename")
+        participant_session_id = attrs.get("session_id") or session_id
 
-        # Drop if no longer latest for this identity.
-        if latest_turn_id_by_identity.get(target.identity) != turn_id:
+        # Drop if a newer turn superseded this one.
+        if latest_turn_id.get(target.identity) != turn_id:
+            logger.debug("Dropping stale turn_id=%d for %s", turn_id, target.identity)
             return
 
         if not filename:
-            await ctx.room.local_participant.publish_data(
-                json.dumps(
-                    {
-                        "type": "error",
-                        "message": "Missing filename context in participant attributes.",
-                        "turn_id": turn_id,
-                    }
-                ),
-                topic=RECOMMENDATION_TOPIC,
-                destination_identities=[target.identity],
-            )
+            logger.error("Missing filename attribute for participant %s", target.identity)
+            await _publish(target, {
+                "type": "error",
+                "message": "Missing filename context — re-upload the presentation.",
+                "turn_id": turn_id,
+            })
             return
 
-        # Let the UI show an immediate "thinking" indicator for this turn.
-        if latest_turn_id_by_identity.get(target.identity) == turn_id:
-            await ctx.room.local_participant.publish_data(
-                json.dumps(
-                    {
-                        "type": "processing",
-                        "turn_id": turn_id,
-                        "question": transcript,
-                    }
-                ),
-                topic=RECOMMENDATION_TOPIC,
-                destination_identities=[target.identity],
-            )
-            
-            # Emit thinking event
+        if latest_turn_id.get(target.identity) == turn_id:
+            await _publish(target, {
+                "type": "processing",
+                "turn_id": turn_id,
+                "question": transcript,
+            })
             try:
                 await emit_voice_event(
                     EventType.VOICE_THINKING,
-                    session_id or "unknown",
-                    {"turn_id": turn_id, "question": transcript}
+                    participant_session_id,
+                    {"turn_id": turn_id, "question": transcript},
                 )
             except Exception:
                 pass
 
-        nav_intent = _parse_navigation_intent(transcript)
-        if nav_intent is not None:
-            payload: dict[str, Any] = {
-                **nav_intent,
-                "turn_id": turn_id,
-                "question": transcript,
-            }
-
-            if latest_turn_id_by_identity.get(target.identity) != turn_id:
+        # Try navigation first (cheap, no vector store).
+        nav = _parse_navigation_intent(transcript)
+        if nav is not None:
+            payload: dict[str, Any] = {**nav, "turn_id": turn_id, "question": transcript}
+            if latest_turn_id.get(target.identity) != turn_id:
                 return
-
-            await ctx.room.local_participant.publish_data(
-                json.dumps(payload),
-                topic=RECOMMENDATION_TOPIC,
-                destination_identities=[target.identity],
-            )
-            
-            # Emit navigation event
+            await _publish(target, payload)
             try:
                 await emit_voice_event(
                     EventType.VOICE_NAVIGATION,
-                    session_id or "unknown",
-                    {
-                        "turn_id": turn_id,
-                        "action": nav_intent.get("action"),
-                        "question": transcript,
-                    }
+                    participant_session_id,
+                    {"turn_id": turn_id, "action": nav.get("action"), "question": transcript},
                 )
             except Exception:
                 pass
+            logger.info("Navigation published | action=%s turn_id=%d", nav.get("action"), turn_id)
             return
 
+        # Vector-store semantic query.
         try:
             result = run_voice_slide_query(
                 transcript,
                 filename=filename,
-                session_id=session_id,
-                top_k=5,
+                session_id=participant_session_id,
+                top_k=3,
             )
-            payload: dict[str, Any] = {
+            payload = {
                 "type": "slide_recommendation",
                 "question": transcript,
                 "answer": result["answer"],
@@ -310,140 +247,126 @@ async def entrypoint(ctx: agents.JobContext) -> None:
                 "recommended_slide_index": result["recommended_slide_index"],
                 "turn_id": turn_id,
             }
-        except LookupError as e:
+            logger.info(
+                "Slide recommendation | slide=%d turn_id=%d",
+                result["recommended_slide_number"], turn_id,
+            )
+        except LookupError as exc:
+            payload = {"type": "error", "message": str(exc), "turn_id": turn_id}
+            logger.warning("LookupError during slide query | %s", exc)
+        except Exception:
+            logger.exception("Slide query failed for transcript=%r", transcript)
             payload = {
                 "type": "error",
-                "message": str(e),
-                "turn_id": turn_id,
-            }
-        except Exception as e:
-            logger.exception("Failed to compute slide recommendation")
-            payload = {
-                "type": "error",
-                "message": f"Failed to compute recommendation: {e}",
+                "message": "Failed to compute slide recommendation.",
                 "turn_id": turn_id,
             }
 
-        # Drop if no longer latest for this identity (e.g., user barged in).
-        if latest_turn_id_by_identity.get(target.identity) != turn_id:
+        if latest_turn_id.get(target.identity) != turn_id:
             return
+        await _publish(target, payload)
 
-        await ctx.room.local_participant.publish_data(
-            json.dumps(payload),
-            topic=RECOMMENDATION_TOPIC,
-            destination_identities=[target.identity],
-        )
+    # ── Session event handlers ───────────────────────────────────────────────
 
     def on_user_input_transcribed(event: agents.UserInputTranscribedEvent) -> None:
         nonlocal turn_counter
+        
+        logger.debug("\n" + "="*80)
+        logger.debug("🎤 TRANSCRIPTION EVENT RECEIVED")
+        logger.debug(f"   Speaker ID: {event.speaker_id or '?'}")
+        logger.debug(f"   Is Final: {event.is_final}")
+        logger.debug(f"   Transcript: {repr(event.transcript[:100] if len(event.transcript) > 100 else event.transcript)}")
+        logger.debug(f"   Raw event attrs: {dir(event)}")
+        logger.debug("="*80)
+
+        # Relay intermediate transcripts to SSE for the live overlay.
         if not event.is_final:
+            logger.debug("   → Intermediate transcript (not final)")
+            try:
+                asyncio.create_task(
+                    emit_voice_event(
+                        EventType.VOICE_TRANSCRIPTION_UPDATE,
+                        session_id,
+                        {
+                            "transcript": event.transcript,
+                            "is_final": False,
+                            "speaker_id": event.speaker_id or "",
+                        },
+                    )
+                )
+                logger.debug("   ✓ SSE event dispatched for intermediate transcript")
+            except Exception as e:
+                logger.error("   ✗ Failed to emit SSE event: %s", e)
             return
 
         transcript = event.transcript.strip()
         if not transcript:
+            logger.debug("⚠️ Empty final transcript received — skipping")
             return
-        _dbg(
-            run_id,
-            "H7",
-            "slide_voice_worker.py:on_user_input_transcribed",
-            "Final transcript received",
-            {"speaker_id": event.speaker_id or "", "chars": len(transcript)},
-        )
 
-        speaker = ctx.room.remote_participants.get(event.speaker_id or "") if event.speaker_id else None
+        logger.info("✅ Final transcript | speaker=%s text=%r", event.speaker_id or "?", transcript)
+
+        # Resolve target participant (falls back to first joiner).
+        speaker = (
+            ctx.room.remote_participants.get(event.speaker_id or "")
+            if event.speaker_id
+            else None
+        )
+        logger.debug("   Resolving target participant: speaker=%s fallback=%s", 
+                    speaker.identity if speaker else None, 
+                    participant.identity if participant else None)
         target = speaker or participant
+        if target is None:
+            logger.warning("❌ No target participant — dropping transcript")
+            return
+
+        logger.debug("   📡 Emitting final transcript to SSE...")
+        try:
+            asyncio.create_task(
+                emit_voice_event(
+                    EventType.VOICE_TRANSCRIPTION_UPDATE,
+                    session_id,
+                    {
+                        "transcript": transcript,
+                        "is_final": True,
+                        "speaker_id": event.speaker_id or "",
+                    },
+                )
+            )
+            logger.debug("   ✓ SSE event dispatched for final transcript")
+        except Exception as e:
+            logger.error("   ✗ Failed to emit final SSE event: %s", e)
 
         turn_counter += 1
         turn_id = turn_counter
-        latest_turn_id_by_identity[target.identity] = turn_id
-        _dbg(
-            run_id,
-            "H7",
-            "slide_voice_worker.py:on_user_input_transcribed",
-            "Publishing recommendation task scheduled",
-            {"target_identity": target.identity, "turn_id": turn_id},
+        latest_turn_id[target.identity] = turn_id
+        logger.debug("   Turn counter incremented: turn_id=%d", turn_id)
+
+        logger.debug("   🚀 Spawning publish_recommendation task...")
+        asyncio.create_task(
+            publish_recommendation(target, transcript, turn_id=turn_id)
         )
-        asyncio.create_task(publish_recommendation(target, transcript, turn_id=turn_id))
+        logger.debug("="*80 + "\n")
 
     def on_session_closed(_: agents.CloseEvent) -> None:
+        logger.info("Agent session closed — shutting down worker")
         ctx.shutdown("agent session closed")
-
-    stt_error_published = False
-
-    async def _publish_stt_error_to_ui(message: str) -> None:
-        nonlocal stt_error_published
-        if stt_error_published:
-            return
-        stt_error_published = True
-        try:
-            await ctx.room.local_participant.publish_data(
-                json.dumps(
-                    {
-                        "type": "error",
-                        "message": message,
-                        "turn_id": 0,
-                    }
-                ),
-                topic=RECOMMENDATION_TOPIC,
-                destination_identities=[participant.identity],
-            )
-            _dbg(run_id, "H9", "slide_voice_worker.py:publish_stt_error", "Published STT error to UI", {"message": message})
-        except Exception:
-            logger.exception("Failed to publish STT error to UI")
 
     session.on("user_input_transcribed", on_user_input_transcribed)
     session.on("close", on_session_closed)
-    def on_session_error(e: Any) -> None:
-        _dbg(
-            run_id,
-            "H8",
-            "slide_voice_worker.py:session.error",
-            "Session error event",
-            {"error": str(getattr(e, "error", e))},
-        )
-
-        err_str = str(getattr(e, "error", e))
-        if "stt_error" not in err_str:
-            return
-
-        if ("401" in err_str) or ("Unauthorized" in err_str):
-            asyncio.create_task(
-                _publish_stt_error_to_ui(
-                    "Live voice STT failed with 401 Unauthorized. "
-                    "Set LIVEKIT_INFERENCE_API_KEY and LIVEKIT_INFERENCE_API_SECRET "
-                    "in your backend environment, then restart the voice worker."
-                )
-            )
-        else:
-            asyncio.create_task(_publish_stt_error_to_ui(err_str))
-
-    session.on("error", on_session_error)
-    session.on(
-        "close",
-        lambda e: _dbg(
-            run_id,
-            "H8",
-            "slide_voice_worker.py:session.close",
-            "Session close event",
-            {"reason": str(getattr(e, "reason", ""))},
-        ),
-    )
 
     try:
-        logger.info("Starting voice session (STT-only) for room=%s", ctx.room.name)
-        _dbg(run_id, "H8", "slide_voice_worker.py:session.start", "Starting session.start", {})
+        logger.info("🚀 Starting voice session | room=%s stt=deepgram/nova-3", ctx.room.name)
         await session.start(agent=PresAIAgent(), room=ctx.room)
-        _dbg(run_id, "H8", "slide_voice_worker.py:session.start", "session.start returned", {})
+        logger.info("✅ Voice session started — listening for speech")
+        logger.info("   Session will process audio from subscribed tracks...")
         await asyncio.Event().wait()
     except Exception:
-        logger.exception("Voice agent session crashed for room=%s", ctx.room.name)
-        _dbg(run_id, "H8", "slide_voice_worker.py:session.start", "Session crashed", {})
+        logger.exception("❌ Voice agent session crashed | room=%s", ctx.room.name)
         raise
 
 
 if __name__ == "__main__":
     agents.cli.run_app(
-        agents.WorkerOptions(
-            entrypoint_fnc=entrypoint,
-        )
+        agents.WorkerOptions(entrypoint_fnc=entrypoint)
     )

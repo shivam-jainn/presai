@@ -97,6 +97,13 @@ class VectorStore:
         if not query_vector:
             return []
 
+        logger.info(f"🔍 VectorStore search:")
+        logger.info(f"   Collection: {self.collection_name}")
+        logger.info(f"   Query vector size: {len(query_vector)}")
+        logger.info(f"   Limit: {limit}")
+        logger.info(f"   Filename filter: {filename}")
+        logger.info(f"   Session ID filter: {session_id}")
+
         search_filter = None
         filter_conditions: List[Condition] = []
         if filename:
@@ -116,6 +123,9 @@ class VectorStore:
 
         if filter_conditions:
             search_filter = Filter(must=filter_conditions)
+            logger.info(f"   Filter conditions: {[f.key for f in filter_conditions]}")
+        else:
+            logger.warning("⚠️  NO FILTER CONDITIONS - searching entire database!")
 
         results = self.client.query_points(
             collection_name=self.collection_name,
@@ -126,6 +136,8 @@ class VectorStore:
         )
         # query_points returns a PointsList object, need to extract points
         scored_points = getattr(results, 'points', []) if hasattr(results, 'points') else results
+        
+        logger.info(f"   Raw results count: {len(scored_points) if scored_points else 0}")
 
         formatted_results: List[Dict[str, Any]] = []
         for result in cast(List[Any], scored_points):
@@ -143,5 +155,46 @@ class VectorStore:
             )
 
         return formatted_results
+
+    def get_total_slides(self, filename: str, session_id: str | None = None) -> int:
+        """
+        Return the highest slide_number stored for the given filename.
+        Uses scroll (no vector needed) to avoid dummy-vector hacks.
+        """
+        try:
+            from qdrant_client.models import FieldCondition, MatchValue, Filter
+
+            must = [FieldCondition(key="filename", match=MatchValue(value=filename))]
+            if session_id:
+                must.append(FieldCondition(key="session_id", match=MatchValue(value=session_id)))
+            search_filter = Filter(must=must)
+
+            # scroll fetches raw points without needing a query vector
+            results, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=search_filter,
+                limit=1000,
+                with_payload=True,
+                with_vectors=False,
+            )
+
+            if not results:
+                logger.warning(f"No slides found for filename={filename}")
+                return 0
+
+            max_slide = 0
+            for point in results:
+                payload   = dict(getattr(point, "payload", {}) or {})
+                slide_num = payload.get("slide_number") or payload.get("slide_id") or 0
+                try:
+                    max_slide = max(max_slide, int(slide_num))
+                except (ValueError, TypeError):
+                    continue
+
+            logger.info(f"📊 Total slides for {filename}: {max_slide}")
+            return max_slide
+        except Exception as e:
+            logger.error(f"Failed to get total slides for {filename}: {e}")
+            return 0
 
 vector_store = VectorStore()
