@@ -9,7 +9,7 @@ export default function TopBar() {
     <header className="fixed top-0 w-full z-50 flex justify-between items-center px-8 py-4 bg-background/80 backdrop-blur-md border-b border-outline-variant/10">
       <div className="flex items-center gap-6">
         <span className="text-primary font-black tracking-tighter text-xl font-figtree">
-          Presentation Studio
+          Presai.
         </span>
         <div className="h-4 w-px bg-outline-variant/30 hidden md:block" />
         <div className="hidden md:flex items-center gap-2 text-on-surface-variant">
@@ -37,7 +37,7 @@ export default function TopBar() {
           className="flex items-center gap-2 bg-primary text-on-primary px-5 py-2 rounded-lg font-bold text-sm tracking-wide transition-all duration-200 shadow-lg shadow-primary/10"
         >
           <Upload className="w-4 h-4" />
-          <span className="hidden sm:inline">Upload another deck</span>
+          <span className="hidden text-white sm:inline">Upload another deck</span>
         </motion.button>
 
         <motion.button 

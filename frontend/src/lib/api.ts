@@ -27,8 +27,42 @@ export interface IngestionResult {
   chunks_stored: number;
   filename: string;
   file_url?: string;
+  ingestion_session_id?: string;
   slides?: Record<number, string[]>;
   total_slides?: number;
+}
+
+export interface VoiceQueryResult {
+  answer: string;
+  recommended_slide_number: number;
+  recommended_slide_index: number;
+  retrieval: Array<{
+    score: number;
+    text: string;
+    slide_number?: number | string;
+    slide_id?: string;
+    filename?: string;
+    source_file_path?: string;
+  }>;
+}
+
+export interface VoiceTranscriptionResult {
+  transcript: string;
+  mode: string;
+}
+
+export interface VoiceLivekitTokenResult {
+  token: string;
+  ws_url: string;
+  room_name: string;
+  identity: string;
+}
+
+interface VoiceQueryOptions {
+  filename: string;
+  sessionId?: string | null;
+  topK?: number;
+  signal?: AbortSignal;
 }
 
 /**
@@ -130,6 +164,72 @@ export const ingestPPT = async (file: File): Promise<IngestionResult> => {
  */
 export const getPPTXUrl = (filename: string): string => {
   return `${API_CONFIG.baseURL}/file/${encodeURIComponent(filename)}`;
+};
+
+export const queryVoiceSlide = async (
+  question: string,
+  options: VoiceQueryOptions
+): Promise<VoiceQueryResult> => {
+  const topK = options.topK ?? 5;
+
+  const response = await apiClient.post<VoiceQueryResult>(
+    "/voice/query",
+    {
+      question,
+      filename: options.filename,
+      session_id: options.sessionId || undefined,
+      top_k: topK,
+    },
+    {
+      signal: options.signal,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  return response.data;
+};
+
+export const transcribeVoiceAudio = async (
+  audioFile: File,
+  signal?: AbortSignal
+): Promise<VoiceTranscriptionResult> => {
+  const formData = new FormData();
+  formData.append("file", audioFile);
+
+  const response = await apiClient.post<VoiceTranscriptionResult>(
+    "/voice/transcribe",
+    formData,
+    {
+      signal,
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
+  return response.data;
+};
+
+export const getVoiceLivekitToken = async (
+  filename: string,
+  sessionId?: string | null
+): Promise<VoiceLivekitTokenResult> => {
+  const response = await apiClient.post<VoiceLivekitTokenResult>(
+    "/voice/livekit/token",
+    {
+      filename,
+      session_id: sessionId || undefined,
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  return response.data;
 };
 
 export default apiClient;

@@ -9,6 +9,10 @@ export const API_CONFIG = {
   timeout: import.meta.env.VITE_API_TIMEOUT || 30000,
 };
 
+export const VOICE_CONFIG = {
+  mode: import.meta.env.VITE_VOICE_MODE || "local", // local | agentkit_live
+};
+
 // Feature flags
 export const FEATURES = {
   enableDebug: import.meta.env.DEV,
@@ -16,5 +20,6 @@ export const FEATURES = {
 
 export default {
   api: API_CONFIG,
+  voice: VOICE_CONFIG,
   features: FEATURES,
 };

@@ -7,6 +7,7 @@ interface SlideState {
   isFileUploaded: boolean;
   fileName: string | null;
   pptUrl: string | null;
+  ingestionSessionId: string | null;
   uploadPickerRequest: number;
   
   // Ingestion state
@@ -25,6 +26,7 @@ interface SlideState {
   // Actions
   setFileUploaded: (uploaded: boolean, fileName?: string) => void;
   setPptUrl: (url: string | null) => void;
+  setIngestionSessionId: (sessionId: string | null) => void;
   requestUploadPicker: () => void;
   setIngesting: (ingesting: boolean) => void;
   setIngestionStatus: (status: IngestionStatus, error?: string) => void;
@@ -39,6 +41,7 @@ const initialState = {
   isFileUploaded: false,
   fileName: null,
   pptUrl: null,
+  ingestionSessionId: null,
   uploadPickerRequest: 0,
   isIngesting: false,
   ingestionStatus: "idle" as IngestionStatus,
@@ -57,6 +60,9 @@ export const useSlideStore = create<SlideState>((set) => ({
   
   setPptUrl: (url) =>
     set({ pptUrl: url }),
+
+  setIngestionSessionId: (sessionId) =>
+    set({ ingestionSessionId: sessionId }),
 
   requestUploadPicker: () =>
     set((state) => ({ uploadPickerRequest: state.uploadPickerRequest + 1 })),

@@ -9,11 +9,7 @@ export default function App() {
       <SlideCanvas />
       <ControlPill />
 
-      {/* Background Atmospheric Elements */}
-      <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-primary/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-primary-container/5 rounded-full blur-[120px]" />
-      </div>
+   
     </div>
   );
 }

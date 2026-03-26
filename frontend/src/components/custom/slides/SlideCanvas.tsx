@@ -6,6 +6,8 @@ import { ApiError, getPPTXUrl, ingestPPT } from "../../../lib/api";
 import { useSlideStore } from "../../../lib/store";
 
 const ACCEPTED_EXTENSIONS = ["ppt", "pptx"];
+const SLIDE_WIDTH = 1920;
+const SLIDE_HEIGHT = 1080;
 
 const isAllowedPresentation = (file: File): boolean => {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -13,16 +15,17 @@ const isAllowedPresentation = (file: File): boolean => {
 };
 
 export default function SlideCanvas() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const renderRef = useRef<HTMLDivElement | null>(null);
   const previewRef = useRef<PPTXPreviewer | null>(null);
 
   const [dragActive, setDragActive] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
 
   const {
     isFileUploaded,
-    fileName,
     isIngesting,
     ingestionStatus,
     ingestionError,
@@ -31,6 +34,7 @@ export default function SlideCanvas() {
     uploadPickerRequest,
     setFileUploaded,
     setPptUrl,
+    setIngestionSessionId,
     setIngestionStatus,
     setSlideContent,
     setTotalSlides,
@@ -38,10 +42,21 @@ export default function SlideCanvas() {
   } = useSlideStore();
 
   useEffect(() => {
-    return () => {
-      previewRef.current?.destroy();
-      previewRef.current = null;
-    };
+    if (!containerRef.current) return;
+    
+    // ResizeObserver ensures scale perfectly tracks container size changes
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        // Calculate the scale needed to fit the slide exactly into the container
+        // using object-fit: contain logic mathematically.
+        const newScale = Math.min(width / SLIDE_WIDTH, height / SLIDE_HEIGHT);
+        setScale(newScale || 1);
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
   }, []);
 
   useEffect(() => {
@@ -51,10 +66,17 @@ export default function SlideCanvas() {
   }, [uploadPickerRequest]);
 
   useEffect(() => {
+    return () => {
+      previewRef.current?.destroy();
+      previewRef.current = null;
+    };
+  }, []);
+
+  // Update slide rendering when currentSlide changes
+  useEffect(() => {
     if (!previewRef.current || !isFileUploaded || totalSlides <= 0) {
       return;
     }
-
     previewRef.current.renderSingleSlide(currentSlide);
   }, [currentSlide, isFileUploaded, totalSlides]);
 
@@ -69,8 +91,8 @@ export default function SlideCanvas() {
     const buffer = await file.arrayBuffer();
     const previewer = init(renderRef.current, {
       mode: "slide",
-      width: 1280,
-      height: 720,
+      width: SLIDE_WIDTH,
+      height: SLIDE_HEIGHT,
     });
     await previewer.preview(buffer);
     previewer.renderSingleSlide(0);
@@ -103,6 +125,7 @@ export default function SlideCanvas() {
       const localRenderedSlides = previewRef.current?.slideCount ?? 0;
       setTotalSlides(Math.max(localRenderedSlides, result.total_slides ?? 0));
       setPptUrl(result.file_url ?? getPPTXUrl(result.filename));
+      setIngestionSessionId(result.ingestion_session_id ?? null);
       setIngestionStatus("success");
     } catch (error) {
       const message =
@@ -141,11 +164,6 @@ export default function SlideCanvas() {
 
   return (
     <main className="min-h-screen pt-24 pb-40 px-6 flex flex-col items-center justify-center">
-      <div className="mb-4 text-center">
-        <span className="font-inter text-primary text-[10px] uppercase tracking-[0.2em] font-bold">
-          Current Presentation
-        </span>
-      </div>
 
       <div className="relative w-full max-w-6xl aspect-video group">
         <div className="absolute -inset-4 bg-primary/5 blur-3xl rounded-[2.5rem] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
@@ -193,13 +211,28 @@ export default function SlideCanvas() {
               </p>
             </div>
           )}
-
-          <div
-            ref={renderRef}
-            className={`relative z-10 h-full w-full overflow-auto p-6 ${
-              isFileUploaded ? "block" : "hidden"
-            }`}
-          />
+<div
+  ref={containerRef}
+  className={`relative z-10 h-full w-full flex items-center justify-center overflow-hidden bg-white ${
+    isFileUploaded ? "flex" : "hidden"
+  }`}
+>
+  <div
+    style={{
+      width: `${SLIDE_WIDTH}px`,
+      height: `${SLIDE_HEIGHT}px`,
+      transform: `scale(${scale})`,
+      transformOrigin: "center center",
+      position: "absolute", // CRITICAL: This pulls the giant element out of flex layout preventing container blowouts
+      top: "50%",
+      left: "50%",
+      marginLeft: `-${SLIDE_WIDTH / 2}px`, // Center horizontally based on unscaled width
+      marginTop: `-${SLIDE_HEIGHT / 2}px`, // Center vertically based on unscaled height
+    }}
+  >
+    <div ref={renderRef} className="w-full h-full" />
+  </div>
+</div>
 
           <div className="absolute bottom-6 right-6 px-3 py-1.5 rounded-full bg-background/80 border border-outline-variant/20 text-xs font-semibold tracking-wide text-on-surface-variant z-20">
             {isIngesting
@@ -212,18 +245,7 @@ export default function SlideCanvas() {
       </div>
 
       <div className="mt-8 flex flex-col items-center gap-2 min-h-10">
-        {fileName && (
-          <div className="px-4 py-1.5 bg-surface-container-high rounded-full border border-outline-variant/10">
-            <span className="font-inter text-on-surface text-xs font-semibold tracking-wide">
-              {fileName}
-            </span>
-          </div>
-        )}
-        {isFileUploaded && (
-          <span className="font-inter text-on-surface-variant text-xs font-semibold tracking-widest">
-            {totalSlides > 0 ? `SLIDE ${currentSlide + 1} / ${totalSlides}` : "SLIDES: RENDERED"}
-          </span>
-        )}
+
         {(localError || ingestionError) && (
           <span className="font-inter text-red-400 text-xs font-semibold tracking-wide">
             {localError || ingestionError}
