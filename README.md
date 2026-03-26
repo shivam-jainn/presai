@@ -1,5 +1,13 @@
 # PresAI - Voice-Controlled Presentation Assistant
 
+![Voice Control](https://img.shields.io/badge/Voice_Control-Navigation-blue)
+![AI Powered](https://img.shields.io/badge/AI-Powered-green)
+![Real-time](https://img.shields.io/badge/Real--time-Processing-orange)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688)
+![React](https://img.shields.io/badge/React-Frontend-61dafb)
+![LiveKit](https://img.shields.io/badge/LiveKit-Audio-red)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
 A smart presentation tool that lets you navigate slides using voice commands. Just ask "Show me the revenue slide" and PresAI finds it for you.
 
 ## What You'll Need
