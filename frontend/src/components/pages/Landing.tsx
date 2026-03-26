@@ -29,7 +29,7 @@ export default function Landing() {
         <div className="font-figtree text-2xl font-black tracking-tighter text-foreground">presai</div>
         <div className="hidden md:flex items-center gap-8">
           <a className="font-headline font-bold text-sm tracking-wide text-primary border-b-2 border-primary/50 pb-1" href="#demo">Demo</a>
-          <a className="font-headline font-medium text-sm tracking-wide text-muted-foreground hover:text-foreground transition-colors" href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a className="font-headline font-medium text-sm tracking-wide text-muted-foreground hover:text-foreground transition-colors" href="https://github.com/shivam-jainn/presai" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
         <Button onClick={signIn} className="font-bold px-6 py-2 rounded-lg hover:scale-95 transition-all duration-200">
           Get Started
@@ -229,7 +229,7 @@ export default function Landing() {
           <div className="flex flex-col md:items-end gap-4">
             <div className="flex gap-8">
               <a className="text-muted-foreground hover:text-primary font-headline text-sm transition-colors" href="#demo">Demo</a>
-              <a className="text-muted-foreground hover:text-primary font-headline text-sm transition-colors" href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a>
+              <a className="text-muted-foreground hover:text-primary font-headline text-sm transition-colors" href="https://github.com/shivam-jainn/presai" target="_blank" rel="noopener noreferrer">GitHub</a>
             </div>
             <div className="pt-8 flex items-center gap-4">
               <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-muted-foreground hover:text-primary transition-colors cursor-pointer">
