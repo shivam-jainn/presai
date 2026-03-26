@@ -13,7 +13,7 @@ import {
   AudioLines, 
   Sparkles, 
   Terminal, 
-  Code 
+  Code,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,223 +23,246 @@ export default function Landing() {
   const { signIn } = useAuth();
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
+    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/20">
       {/* TopNavBar */}
-      <nav className="fixed top-0 w-full flex justify-between items-center px-8 py-4 max-w-screen-2xl left-1/2 -translate-x-1/2 bg-background/80 backdrop-blur-2xl z-50">
-        <div className="font-figtree text-2xl font-black tracking-tighter text-foreground">presai</div>
-        <div className="hidden md:flex items-center gap-8">
-          <a className="font-headline font-bold text-sm tracking-wide text-primary border-b-2 border-primary/50 pb-1" href="#demo">Demo</a>
-          <a className="font-headline font-medium text-sm tracking-wide text-muted-foreground hover:text-foreground transition-colors" href="https://github.com/shivam-jainn/presai" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <nav className="fixed top-0 w-full flex justify-between items-center px-6 md:px-12 py-4 max-w-[100vw] bg-background/60 backdrop-blur-2xl border-b border-border/40 z-50">
+        <div className="flex items-center gap-2 cursor-pointer">
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <AudioLines className="w-4 h-4 text-primary" />
+          </div>
+          <div className="font-figtree text-2xl font-black tracking-tighter text-foreground">presai</div>
         </div>
-        <Button onClick={signIn} className="font-bold px-6 py-2 rounded-lg hover:scale-95 transition-all duration-200">
-          Get Started
-        </Button>
+        
+        <div className="hidden md:flex items-center gap-8 bg-muted/40 px-6 py-2 rounded-full border border-border/50">
+          <a className="font-headline font-semibold text-sm tracking-wide text-foreground hover:text-primary transition-colors" href="#demo">Demo</a>
+          <a className="font-headline font-medium text-sm tracking-wide text-muted-foreground hover:text-foreground transition-colors" href="#features">Features</a>
+          <a className="font-headline font-medium text-sm tracking-wide text-muted-foreground hover:text-foreground transition-colors" href="#pricing">Pricing</a>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <a className="hidden sm:block text-muted-foreground hover:text-foreground transition-colors" href="https://github.com/shivam-jainn/presai" target="_blank" rel="noopener noreferrer">
+          </a>
+          <Button onClick={signIn} className="font-bold px-6 py-2 rounded-full hover:scale-105 transition-all duration-300 shadow-lg shadow-primary/20">
+            Get Started
+          </Button>
+        </div>
       </nav>
 
-      <main className="pt-24">
+      <main className="pt-32 overflow-hidden">
         {/* HERO SECTION */}
-        <section className="max-w-7xl mx-auto px-8 py-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <section className="max-w-[90rem] mx-auto px-6 md:px-12 py-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="space-y-8"
+            className="space-y-10 z-10"
           >
-            <div className="space-y-4">
-              <span className="font-sans text-xs uppercase tracking-[0.2em] text-primary font-bold">The Invisible Conductor</span>
-              <h1 className="font-figtree text-6xl md:text-8xl font-black tracking-tighter leading-tight text-foreground">
-                Talk to your slides.
+            <div className="space-y-6">
+              <Badge variant="outline" className="px-4 py-1.5 rounded-full border-primary/30 bg-primary/5 text-primary gap-2 font-medium">
+                <Sparkles className="w-3.5 h-3.5" />
+                Meet The Invisible Conductor
+              </Badge>
+              <h1 className="font-figtree text-6xl md:text-8xl lg:text-[6.5rem] font-black tracking-tighter leading-[0.9] text-foreground">
+                Talk to <br/> your slides.
               </h1>
             </div>
-            <p className="text-xl text-muted-foreground max-w-lg leading-relaxed font-light">
+            
+            <p className="text-xl md:text-2xl text-muted-foreground max-w-lg leading-relaxed font-light">
               Upload a deck. Ask anything. Jump anywhere. <br/>
-              <span className="text-foreground">No clicking. No guessing.</span>
+              <span className="text-foreground font-medium">No clicking. No guessing.</span>
             </p>
 
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
+              <Button onClick={signIn} size="lg" className="rounded-full h-14 px-8 text-lg font-bold group">
+                Start Presenting
+                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Button>
+              <Button size="lg" variant="outline" className="rounded-full h-14 px-8 text-lg font-bold bg-background">
+                Watch Demo
+              </Button>
+            </div>
+            
+            <div className="flex items-center gap-6 pt-8 text-sm font-medium text-muted-foreground">
+              <div className="flex items-center gap-2"><CloudUpload className="w-4 h-4"/> Instant Upload</div>
+              <div className="flex items-center gap-2"><AudioLines className="w-4 h-4"/> Voice Controlled</div>
+            </div>
           </motion.div>
 
           {/* Mock UI Slide Viewer */}
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1, delay: 0.2 }}
-            className="relative group"
+            initial={{ opacity: 0, scale: 0.9, rotateY: 15 }}
+            animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+            transition={{ duration: 1, delay: 0.2, type: "spring" }}
+            className="relative group perspective-[2000px] z-0"
           >
-            <div className="absolute -inset-4 bg-gradient-to-tr from-primary/20 to-transparent blur-3xl opacity-30 group-hover:opacity-50 transition-opacity"></div>
-            <div className="relative bg-surface-container rounded-[2rem] overflow-hidden aspect-[4/3] border border-border shadow-2xl">
+            {/* Glow effects */}
+            <div className="absolute -inset-10 bg-gradient-to-tr from-primary/30 via-primary/5 to-transparent blur-3xl opacity-50 group-hover:opacity-70 transition-opacity duration-700 rounded-full"></div>
+            
+            <div className="relative bg-surface-container rounded-[2.5rem] overflow-hidden aspect-[16/11] border border-border/50 shadow-2xl shadow-primary/10 transform-gpu transition-transform duration-700 group-hover:scale-[1.02]">
+              {/* Top Window Bar Mock */}
+              <div className="absolute top-0 w-full h-12 bg-background/50 backdrop-blur-md border-b border-border/50 flex items-center px-6 gap-2 z-10">
+                <Circle className="w-3 h-3 fill-destructive text-destructive" />
+                <Circle className="w-3 h-3 fill-amber-500 text-amber-500" />
+                <Circle className="w-3 h-3 fill-green-500 text-green-500" />
+              </div>
+
               <img 
                 alt="Slide Preview" 
-                className="w-full h-full object-cover grayscale-[0.2] opacity-80" 
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiRbW1LwYQuxLuwOgyu8S387_EGOhaDRzGWdfd4xRpe0ZkjR_IwFuzCT1-XHdZwRDwZhkZS46n_zak5L6YBNKqOOq4AtZFY6diaVzjCJprU4Fcw9UY1kzIzFtapbnOJbFWAW42fZnXuuBXdqgJgxlDF9GK3Un_zudtYKeR0S8toniCjiPq2MRwxA7Gizi0wge9mJ-_N0PhqTB4AKPFSeEmbHClfp3-CsUdw4wpBpmHjIAhZm8VO44neMwEyQVQ9j_yLrt3wKi4IQ4S"
+                className="w-full h-full object-cover opacity-90 transition-all duration-700 group-hover:scale-105" 
+                src="https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=2574&auto=format&fit=crop"
                 referrerPolicy="no-referrer"
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-transparent to-transparent"></div>
+
               {/* Dynamic Island Recorder Widget */}
-              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[80%] max-w-md">
-                <div className="glass-island px-6 py-4 rounded-full flex items-center justify-between gap-4 shadow-xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
-                      <Mic className="w-5 h-5" />
+              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[85%] max-w-sm">
+                <div className="glass-island bg-background/70 backdrop-blur-xl border border-white/10 px-6 py-4 rounded-full flex items-center justify-between gap-4 shadow-2xl">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-inner">
+                      <Mic className="w-6 h-6 animate-pulse" />
                     </div>
-                    <div className="voice-wave">
+                    <div className="voice-wave flex items-end gap-1 h-8">
                       {[1, 2, 3, 4, 5, 6, 7].map((i) => (
                         <div 
                           key={i} 
-                          className="wave-bar wave-bar-anim" 
-                          style={{ animationDelay: `${i * 0.1}s` }}
+                          className="w-1.5 bg-primary rounded-full animate-bounce" 
+                          style={{ height: `${Math.max(20, Math.random() * 100)}%`, animationDelay: `${i * 0.1}s`, animationDuration: '0.8s' }}
                         />
                       ))}
                     </div>
                   </div>
-                  <span className="text-primary font-medium text-sm pr-2">Listening...</span>
+                  <span className="text-foreground font-semibold text-sm pr-2">"Skip to Q3 Revenue"</span>
                 </div>
               </div>
             </div>
+
+            {/* Floating Elements */}
+            <motion.div animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }} className="absolute -top-6 -right-6 bg-background border border-border p-4 rounded-2xl shadow-xl">
+               <Upload className="w-6 h-6 text-primary" />
+            </motion.div>
           </motion.div>
         </section>
 
         {/* PUNCHLINE SECTION */}
-        <section className="py-32 bg-muted/30 dark:bg-muted/10">
-          <div className="max-w-4xl mx-auto px-8 text-center space-y-6">
-            <div className="font-figtree space-y-2">
+        <section className="py-40 relative">
+          <div className="absolute inset-0 bg-primary/5 skew-y-3 origin-top-left -z-10"></div>
+          <div className="max-w-4xl mx-auto px-6 text-center space-y-8">
+            <div className="font-figtree space-y-4">
               <motion.h2 
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 0.4, y: 0 }}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 0.3, y: 0 }}
                 viewport={{ once: true }}
-                className="text-4xl md:text-6xl font-extrabold text-foreground"
+                className="text-5xl md:text-7xl font-black text-foreground"
               >
                 Slides shouldn’t be static.
               </motion.h2>
               <motion.h2 
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 0.6, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: 0.2 }}
-                className="text-4xl md:text-6xl font-extrabold text-foreground"
+                className="text-5xl md:text-7xl font-black text-foreground"
               >
                 Search shouldn’t be manual.
               </motion.h2>
               <motion.h2 
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: 0.4 }}
-                className="text-4xl md:text-6xl font-extrabold text-foreground"
+                className="text-5xl md:text-7xl font-black text-primary drop-shadow-sm"
               >
                 Navigation shouldn’t be dumb.
               </motion.h2>
             </div>
             <motion.div 
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
+              initial={{ opacity: 0, scale: 0.8 }}
+              whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
               transition={{ delay: 0.8 }}
-              className="pt-12 flex flex-col items-center gap-6"
+              className="pt-16 flex flex-col items-center gap-6"
             >
-              <div className="h-[1px] w-24 bg-primary/30"></div>
-              <p className="text-2xl font-headline italic font-light text-primary">So we fixed it.</p>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* DEMO SECTION */}
-        <section id="demo" className="py-24 max-w-7xl mx-auto px-8">
-          <div className="text-center mb-16 space-y-4">
-            <span className="font-sans text-primary tracking-[0.3em] uppercase text-xs font-bold">Live Experience</span>
-            <h3 className="font-figtree text-4xl font-bold text-foreground">The Canvas</h3>
-          </div>
-          <div className="relative bg-card rounded-[2.5rem] p-4 md:p-8 border border-border shadow-sm">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              {/* Upload Sidebar */}
-              <div className="md:col-span-1 bg-muted/50 dark:bg-muted/20 rounded-2xl p-6 flex flex-col items-center justify-center border border-dashed border-muted-foreground/30 group hover:border-primary/50 transition-colors cursor-pointer">
-                <CloudUpload className="w-10 h-10 text-primary mb-3" />
-                <p className="text-sm font-medium text-muted-foreground">Drop PDF or PPTX</p>
-              </div>
-              {/* Main Preview Area */}
-              <div className="md:col-span-3 aspect-video bg-background dark:bg-background/50 rounded-2xl overflow-hidden relative group border border-border">
-                <img 
-                  alt="Demo Content" 
-                  className="w-full h-full object-cover opacity-60" 
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiid3V6qhjEO8SoNJHeF18V9uBowAKPNWdkJXCWfvc373Mn3N3dk7bRJ9f39Is_Ux6Dz3V-7C2yf_0kl3UfaOusTfzkff5uBoYn-_I9L-Au7ymvhTnvRi0kjdPzcd4dN93CnHl84v3ycXdHAFiTUacs2PwiL-w2wHVvIFuA1O66zGV9py43t5fzF3r3slHGsSfuzUlg7OisecWjT8opQE4DnVXjnRhPl22BPJ-FKeReJbT87kGfanTZMAbQiXYSQYuhGyEMmTMZNLK"
-                  referrerPolicy="no-referrer"
-                />
-                {/* The Signature Voice Orb */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-secondary-foreground blur-2xl opacity-40 animate-pulse"></div>
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-secondary-foreground relative flex items-center justify-center shadow-[0_0_50px_rgba(211,187,255,0.3)]">
-                    <Circle className="w-10 h-10 text-primary-foreground fill-primary-foreground" />
-                  </div>
-                </div>
-                {/* Focused Dynamic Island */}
-                <div className="absolute top-8 left-1/2 -translate-x-1/2">
-                  <div className="glass-island px-8 py-3 rounded-full flex items-center gap-6 shadow-2xl scale-110">
-                    <AudioLines className="w-5 h-5 text-primary" />
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-primary uppercase tracking-widest font-bold">Interrupt Mode</span>
-                      <span className="text-sm text-foreground font-medium">"Jump to the revenue slide"</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="mt-8 text-center">
-              <p className="text-muted-foreground font-headline text-lg italic">"Go ahead. Interrupt it."</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Bento Features */}
-        <section className="max-w-7xl mx-auto px-8 py-24">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <motion.div
-              whileHover={{ y: -4 }}
-              className="md:col-span-2 bg-card rounded-[2rem] p-10 flex flex-col justify-between transition-transform duration-300 border border-border shadow-sm"
-            >
-              <div>
-                <h4 className="font-figtree text-3xl font-bold mb-4">Semantic Navigation</h4>
-                <p className="text-muted-foreground leading-relaxed mb-8">Stop scrolling through 100 slides. Just ask "What was the result of the Q3 audit?" and Presai will take you there instantly.</p>
-              </div>
-              <div className="flex gap-2">
-                <Badge variant="secondary" className="bg-primary/10 text-primary text-xs font-bold uppercase tracking-tighter border-none">Instant</Badge>
-                <Badge variant="secondary" className="bg-primary/10 text-primary text-xs font-bold uppercase tracking-tighter border-none">Accurate</Badge>
-              </div>
-            </motion.div>
-            <motion.div
-              whileHover={{ y: -4 }}
-              className="bg-primary rounded-[2rem] p-10 flex flex-col justify-between text-primary-foreground transition-transform duration-300 shadow-sm"
-            >
-              <Sparkles className="w-12 h-12" />
-              <div>
-                <h4 className="font-figtree text-3xl font-bold mb-2">AI Native</h4>
-                <p className="text-primary-foreground/80">Built on the latest LLMs to understand context, not just keywords.</p>
-              </div>
+              <div className="h-[2px] w-32 bg-gradient-to-r from-transparent via-primary to-transparent"></div>
+              <p className="text-3xl font-headline italic font-light text-foreground">So we built <span className="font-bold font-figtree not-italic">presai</span>.</p>
             </motion.div>
           </div>
         </section>
       </main>
+{/* THE MEGA FOOTER */}
+      <footer className="relative bg-[#09090b] text-zinc-50 pt-40 pb-12 overflow-hidden rounded-t-[3rem] mt-20 border-t border-zinc-800/60 shadow-[0_-20px_80px_-20px_rgba(0,0,0,0.5)]">
+        
+        {/* Subtle Grid Pattern Overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+        
+        {/* Ambient Glows */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-primary/20 blur-[150px] rounded-[100%] pointer-events-none" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-primary/10 blur-[120px] rounded-full pointer-events-none" />
+        
+        <div className="max-w-[90rem] mx-auto px-6 md:px-12 relative z-10">
+          
+          {/* Top CTA */}
+          <div className="flex flex-col items-center text-center space-y-10 mb-20">
+            
+            {/* Social Proof Pill */}
+            <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-zinc-900/80 border border-zinc-800 backdrop-blur-md shadow-xl">
+              <div className="flex -space-x-2">
+                <div className="w-7 h-7 rounded-full bg-zinc-800 border-2 border-zinc-900 overflow-hidden"><img src="https://i.pravatar.cc/100?img=1" alt="user" className="w-full h-full object-cover grayscale opacity-70" /></div>
+                <div className="w-7 h-7 rounded-full bg-zinc-800 border-2 border-zinc-900 overflow-hidden"><img src="https://i.pravatar.cc/100?img=2" alt="user" className="w-full h-full object-cover grayscale opacity-70" /></div>
+                <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-[10px] font-bold text-primary-foreground border-2 border-zinc-900 shadow-inner">+2k</div>
+              </div>
+              <span className="text-sm font-medium text-zinc-300 pr-2">Presenters already joined</span>
+            </div>
 
-      {/* Footer */}
-      <footer className="w-full py-16 px-8 max-w-7xl mx-auto mt-20 bg-muted/30 dark:bg-muted/10 border-t border-border">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          <div className="space-y-6">
-            <div className="font-figtree text-xl font-bold text-foreground">presai</div>
-            <p className="font-headline text-sm text-muted-foreground max-w-xs">
-              Built fast. Works faster. © 2024 presai.
+            <h2 className="text-6xl md:text-8xl lg:text-9xl font-black font-figtree tracking-tighter leading-[0.9] text-transparent bg-clip-text bg-gradient-to-b from-white via-white/90 to-white/40">
+              Give your slides <br/> a voice.
+            </h2>
+            
+            <p className="text-zinc-400 text-xl md:text-2xl max-w-2xl font-light">
+              Stop clicking. Start talking. Experience the future of presentations today.
             </p>
+            
+            <Button onClick={signIn} size="lg" className="relative rounded-full h-16 px-10 text-lg font-bold group bg-primary hover:bg-primary/90 text-primary-foreground border-none shadow-[0_0_40px_-10px_rgba(var(--primary),0.5)] overflow-hidden transition-all hover:scale-105">
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out"></div>
+              <span className="relative flex items-center">
+                Get Started for Free
+                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </span>
+            </Button>
           </div>
-          <div className="flex flex-col md:items-end gap-4">
-            <div className="flex gap-8">
-              <a className="text-muted-foreground hover:text-primary font-headline text-sm transition-colors" href="#demo">Demo</a>
-              <a className="text-muted-foreground hover:text-primary font-headline text-sm transition-colors" href="https://github.com/shivam-jainn/presai" target="_blank" rel="noopener noreferrer">GitHub</a>
-            </div>
-            <div className="pt-8 flex items-center gap-4">
-              <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-muted-foreground hover:text-primary transition-colors cursor-pointer">
-                <Terminal className="w-4 h-4" />
+
+          {/* Giant Watermark & Floating Bottom Bar */}
+          <div className="relative w-full flex flex-col items-center mt-32">
+            
+            {/* Fading Watermark */}
+            <h1 className="text-[22vw] leading-[0.75] font-black tracking-tighter select-none font-figtree bg-clip-text text-transparent bg-gradient-to-b from-zinc-800/60 via-zinc-900/80 to-[#09090b]">
+              presai.
+            </h1>
+            
+            {/* Floating Glass Bar over the watermark */}
+            <div className="absolute bottom-4 md:bottom-8 w-full max-w-4xl px-6 flex flex-col md:flex-row justify-between items-center gap-6 text-zinc-500 text-sm font-medium z-20">
+              
+              <div className="flex items-center gap-2 bg-[#09090b]/50 py-1 px-3 rounded-full backdrop-blur-sm">
+                <AudioLines className="w-4 h-4 text-primary" />
+                <span>© {new Date().getFullYear()} presai Inc.</span>
               </div>
-              <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-muted-foreground hover:text-primary transition-colors cursor-pointer">
-                <Code className="w-4 h-4" />
+              
+              <div className="flex items-center gap-6 px-6 py-3 rounded-full bg-zinc-900/60 border border-zinc-800/50 backdrop-blur-xl shadow-2xl">
+                <a href="https://github.com/shivam-jainn/presai" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors flex items-center gap-2">
+                  GitHub
+                </a>
+                <div className="w-px h-4 bg-zinc-800"></div>
+                <div className="flex items-center gap-2 text-zinc-300">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  All systems go
+                </div>
               </div>
+              
             </div>
           </div>
+
         </div>
       </footer>
     </div>
