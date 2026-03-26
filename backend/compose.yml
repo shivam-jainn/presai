@@ -1,0 +1,31 @@
+services:
+  vectordb:
+    image: "qdrant/qdrant:latest"
+    container_name: "vectordb"
+    ports:
+      - "6333:6333"
+    volumes:
+      - vectordb_data:/qdrant/storage
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: livekit
+    command: >-
+      --dev
+      --bind 0.0.0.0
+      --rtc.use_external_ip=false
+      --rtc.enable_loopback_candidate=true
+      --rtc.allow_tcp_fallback=true
+      --rtc.tcp_port 7881
+      --rtc.port_range_start 51000
+      --rtc.port_range_end 51020
+    environment:
+      LIVEKIT_KEYS: "devkey: devsecretdevsecretdevsecretdevsec"
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7881:7881/udp"
+      - "51000-51020:51000-51020/udp"
+      
+volumes:
+  vectordb_data:

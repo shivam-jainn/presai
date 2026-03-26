@@ -1,9 +1,15 @@
-import Landing from './components/Landing'
+import { useAuth } from './contexts/AuthContext'
+import Landing from './components/pages/Landing'
+import Slides from './components/pages/Slides'
 
 function App() {
+  const { isSignedIn } = useAuth()
+
   return (
     <div>
-      <Landing />
+      {
+        isSignedIn ? <Slides /> : <Landing />
+      }
     </div>
   )
 }
