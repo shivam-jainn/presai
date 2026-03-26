@@ -1,134 +1,131 @@
 # PresAI - Voice-Controlled Presentation Assistant
 
-![Voice Control](https://img.shields.io/badge/Voice_Control-Navigation-blue)
-![AI Powered](https://img.shields.io/badge/AI-Powered-green)
-![Real-time](https://img.shields.io/badge/Real--time-Processing-orange)
-![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688)
-![React](https://img.shields.io/badge/React-Frontend-61dafb)
-![LiveKit](https://img.shields.io/badge/LiveKit-Audio-red)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+A smart presentation tool that lets you navigate slides using voice commands. Just ask "Show me the revenue slide" and PresAI finds it for you.
 
-Navigate slides using voice commands. Built with FastAPI + React + LiveKit.
+## What You'll Need
 
-## Quick Start
+- **Computer**: Mac or Windows
+- **Docker Desktop**: [Download here](https://www.docker.com/products/docker-desktop)
+- **Ollama** (for AI embeddings): [Download here](https://ollama.ai)
+- **Python 3.10+** (usually comes with your computer)
+- **Node.js 18+**: [Download here](https://nodejs.org)
+
+---
+
+## Quick Setup (5 minutes)
+
+### Step 1: Start Infrastructure
 
 ```bash
-# 1. Start infrastructure (Qdrant + LiveKit)
 make infra-up
+```
 
-# 2. Backend setup & run (with automatic health checks)
+> This starts Qdrant (database) and LiveKit (voice server) in Docker.
+
+### Step 2: Setup Backend
+
+```bash
 cd backend
 cp .env.example .env
-# Add GROQ_API_KEY (get free key at https://console.groq.com/keys)
+```
+
+Now open `.env` in a text editor and add your API keys:
+
+| Service | Where to Get Free Key | Key Variable |
+|---------|----------------------|--------------|
+| **Groq** (AI for answers) | [groq.com](https://console.groq.com/keys) | `LLM_API_KEY` |
+| **Deepgram** (voice recognition) | [deepgram.com](https://console.deepgram.com) | `STT_API_KEY` and `TTS_API_KEY` |
+
+Then run:
+
+```bash
 cd ..
 make backend-api
+```
 
-# The startup script will automatically:
-# - Load your .env configuration
-# - Check all service connections
-# - Show you a detailed health report
-# - Start the server if everything is healthy
+### Step 3: Start Frontend
 
-# 3. Frontend (new terminal)
+Open a **new terminal** window:
+
+```bash
 make frontend
+```
 
-#4. Start the worker
+### Step 4: Start Voice Worker
+
+Open **another new terminal** window:
+
+```bash
 make worker
 ```
 
-Open **http://localhost:5173**
+---
 
-## Requirements
+## How to Use
 
-- Python 3.10+ (with UV)
-- Node.js 18+
-- Docker Desktop
+1. Open **http://localhost:5173** in your browser
+2. Upload a PowerPoint file (`.pptx`)
+3. Click the microphone button
+4. Ask questions like:
+   - "Show me slide 5"
+   - "Go to the revenue slide"
+   - "What's on the last slide?"
 
-## Usage
-
-1. Upload a `.pptx` file
-2. Click the microphone
-3. Ask questions like "Show me the revenue slide"
-
-## Configuration
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GROQ_API_KEY` | Free AI API key | Required |
-| `VOICE_MODE` | `local` or `agentkit_live` | `local` |
-| `EMBEDDINGS_PROVIDER` | `ollama`, `groq`, `openai` | `ollama` |
-| `LLM_PROVIDER` | `groq`, `ollama`, `openai` | `groq` |
-
-## API
-
-- Health: `GET http://localhost:8000/health`
-- Upload: `POST /api/v1/ingest`
-- Voice: `POST /api/v1/voice/query`
-- Docs: `http://localhost:8000/docs`
+---
 
 ## Troubleshooting
 
-### Health Check System
-
-PresAI has a built-in health check system that runs automatically on startup:
-
+### "Qdrant connection failed"
 ```bash
-# Start backend with health checks
-make backend-api
-
-# Or run directly
-cd backend
-python startup.py
+# Make sure Docker is running, then:
+make infra-down
+make infra-up
 ```
 
-**What it checks:**
-- ✅ Qdrant vector database connection
-- ✅ Ollama (if using local embeddings)
-- ✅ Groq API (if configured)
-- ✅ Deepgram API (if configured)
-- ✅ LiveKit server connectivity
-- ✅ File storage path accessibility
-
-**Web endpoints:**
-- **Basic**: http://localhost:8000/health
-- **Detailed**: http://localhost:8000/health/detailed
-
-**Test script:**
+### "Ollama not responding"
 ```bash
-cd backend
-uv run python test_health.py
-```
-
-### Common Issues
-
-#### Qdrant Connection Failed
-```bash
-# Check if Qdrant is running
-docker ps | grep vectordb
-
-# Restart if needed
-make infra-down && make infra-up
-```
-
-#### Ollama Not Responding
-```bash
-# Start Ollama
+# In a new terminal:
 ollama serve
-
-# Pull required model
 ollama pull nomic-embed-text
-
-# Test connection
-curl http://localhost:11434/api/tags
 ```
 
-#### Groq/Deepgram API Errors
-- Verify API keys in `.env` are correct
-- Check you haven't exceeded free tier limits
-- Test keys with the `/health/detailed` endpoint
+### "API key error"
+- Double-check your keys in `.env`
+- Make sure there are no extra spaces or quotes around the key
 
-## Links
+### Need help?
+Run this to see all service connections:
+```bash
+cd backend
+python test_health.py
+```
 
-- [Quick Start Guide](QUICKSTART.md)
-- [Groq API Key](https://console.groq.com/keys)
-- [Ollama](https://ollama.ai/)
+---
+
+## Configuration Options
+
+Want to customize? Edit `.env`:
+
+```
+# AI Provider (groq is free)
+LLM_PROVIDER=groq
+
+# Voice Recognition (deepgram recommended)
+STT_PROVIDER=deepgram
+
+# Embeddings (ollama is local & free)
+EMBEDDINGS_PROVIDER=local
+```
+
+---
+
+## API Docs
+
+- **Health Check**: http://localhost:8000/health
+- **Full API Docs**: http://localhost:8000/docs
+
+---
+
+## License
+
+MIT
