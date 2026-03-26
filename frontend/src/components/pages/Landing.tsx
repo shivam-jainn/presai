@@ -17,20 +17,22 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Landing() {
+  const { signIn } = useAuth();
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
       {/* TopNavBar */}
       <nav className="fixed top-0 w-full flex justify-between items-center px-8 py-4 max-w-screen-2xl left-1/2 -translate-x-1/2 bg-background/80 backdrop-blur-2xl z-50">
         <div className="font-figtree text-2xl font-black tracking-tighter text-foreground">presai</div>
         <div className="hidden md:flex items-center gap-8">
-          <a className="font-headline font-bold text-sm tracking-wide text-primary border-b-2 border-primary/50 pb-1" href="#">Demo</a>
-          <a className="font-headline font-medium text-sm tracking-wide text-foreground/70 hover:text-foreground transition-colors" href="#">GitHub</a>
-          <a className="font-headline font-medium text-sm tracking-wide text-foreground/70 hover:text-foreground transition-colors" href="#">Architecture</a>
+          <a className="font-headline font-bold text-sm tracking-wide text-primary border-b-2 border-primary/50 pb-1" href="#demo">Demo</a>
+          <a className="font-headline font-medium text-sm tracking-wide text-muted-foreground hover:text-foreground transition-colors" href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a>
         </div>
-        <Button className="font-bold px-6 py-2 rounded-lg hover:scale-95 transition-all duration-200">
-          Deploy
+        <Button onClick={signIn} className="font-bold px-6 py-2 rounded-lg hover:scale-95 transition-all duration-200">
+          Get Started
         </Button>
       </nav>
 
@@ -53,14 +55,7 @@ export default function Landing() {
               Upload a deck. Ask anything. Jump anywhere. <br/>
               <span className="text-foreground">No clicking. No guessing.</span>
             </p>
-            <div className="flex flex-wrap gap-4 pt-4">
-              <Button size="lg" className="rounded-xl font-bold text-lg px-8 py-6 flex items-center gap-2">
-                Try it <ArrowRight className="w-5 h-5" />
-              </Button>
-              <Button variant="secondary" size="lg" className="rounded-xl font-bold text-lg px-8 py-6 bg-surface-container-highest hover:bg-accent flex items-center gap-2">
-                <Upload className="w-5 h-5" /> Upload PPT
-              </Button>
-            </div>
+
           </motion.div>
 
           {/* Mock UI Slide Viewer */}
@@ -103,7 +98,7 @@ export default function Landing() {
         </section>
 
         {/* PUNCHLINE SECTION */}
-        <section className="py-32 bg-surface-container-lowest">
+        <section className="py-32 bg-muted/30 dark:bg-muted/10">
           <div className="max-w-4xl mx-auto px-8 text-center space-y-6">
             <div className="font-figtree space-y-2">
               <motion.h2 
@@ -147,20 +142,20 @@ export default function Landing() {
         </section>
 
         {/* DEMO SECTION */}
-        <section className="py-24 max-w-7xl mx-auto px-8">
+        <section id="demo" className="py-24 max-w-7xl mx-auto px-8">
           <div className="text-center mb-16 space-y-4">
             <span className="font-sans text-primary tracking-[0.3em] uppercase text-xs font-bold">Live Experience</span>
-            <h3 className="font-figtree text-4xl font-bold">The Canvas</h3>
+            <h3 className="font-figtree text-4xl font-bold text-foreground">The Canvas</h3>
           </div>
-          <div className="relative bg-surface-container-low rounded-[2.5rem] p-4 md:p-8 border border-border">
+          <div className="relative bg-card rounded-[2.5rem] p-4 md:p-8 border border-border shadow-sm">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {/* Upload Sidebar */}
-              <div className="md:col-span-1 bg-surface-container rounded-2xl p-6 flex flex-col items-center justify-center border border-dashed border-muted-foreground/30 group hover:border-primary/50 transition-colors cursor-pointer">
+              <div className="md:col-span-1 bg-muted/50 dark:bg-muted/20 rounded-2xl p-6 flex flex-col items-center justify-center border border-dashed border-muted-foreground/30 group hover:border-primary/50 transition-colors cursor-pointer">
                 <CloudUpload className="w-10 h-10 text-primary mb-3" />
                 <p className="text-sm font-medium text-muted-foreground">Drop PDF or PPTX</p>
               </div>
               {/* Main Preview Area */}
-              <div className="md:col-span-3 aspect-video bg-background rounded-2xl overflow-hidden relative group">
+              <div className="md:col-span-3 aspect-video bg-background dark:bg-background/50 rounded-2xl overflow-hidden relative group border border-border">
                 <img 
                   alt="Demo Content" 
                   className="w-full h-full object-cover opacity-60" 
@@ -195,9 +190,9 @@ export default function Landing() {
         {/* Bento Features */}
         <section className="max-w-7xl mx-auto px-8 py-24">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <motion.div 
+            <motion.div
               whileHover={{ y: -4 }}
-              className="md:col-span-2 bg-surface-container-high rounded-[2rem] p-10 flex flex-col justify-between transition-transform duration-300"
+              className="md:col-span-2 bg-card rounded-[2rem] p-10 flex flex-col justify-between transition-transform duration-300 border border-border shadow-sm"
             >
               <div>
                 <h4 className="font-figtree text-3xl font-bold mb-4">Semantic Navigation</h4>
@@ -208,9 +203,9 @@ export default function Landing() {
                 <Badge variant="secondary" className="bg-primary/10 text-primary text-xs font-bold uppercase tracking-tighter border-none">Accurate</Badge>
               </div>
             </motion.div>
-            <motion.div 
+            <motion.div
               whileHover={{ y: -4 }}
-              className="bg-primary rounded-[2rem] p-10 flex flex-col justify-between text-primary-foreground transition-transform duration-300"
+              className="bg-primary rounded-[2rem] p-10 flex flex-col justify-between text-primary-foreground transition-transform duration-300 shadow-sm"
             >
               <Sparkles className="w-12 h-12" />
               <div>
@@ -223,7 +218,7 @@ export default function Landing() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full py-16 px-8 max-w-7xl mx-auto mt-20 bg-surface-container-lowest border-t border-border">
+      <footer className="w-full py-16 px-8 max-w-7xl mx-auto mt-20 bg-muted/30 dark:bg-muted/10 border-t border-border">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           <div className="space-y-6">
             <div className="font-figtree text-xl font-bold text-foreground">presai</div>
@@ -233,9 +228,8 @@ export default function Landing() {
           </div>
           <div className="flex flex-col md:items-end gap-4">
             <div className="flex gap-8">
-              <a className="text-muted-foreground hover:text-primary font-headline text-sm transition-colors" href="#">Demo</a>
-              <a className="text-muted-foreground hover:text-primary font-headline text-sm transition-colors" href="#">GitHub</a>
-              <a className="text-muted-foreground hover:text-primary font-headline text-sm transition-colors" href="#">Architecture</a>
+              <a className="text-muted-foreground hover:text-primary font-headline text-sm transition-colors" href="#demo">Demo</a>
+              <a className="text-muted-foreground hover:text-primary font-headline text-sm transition-colors" href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a>
             </div>
             <div className="pt-8 flex items-center gap-4">
               <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-muted-foreground hover:text-primary transition-colors cursor-pointer">

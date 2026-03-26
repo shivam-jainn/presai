@@ -139,13 +139,20 @@ const handleApiError = (error: AxiosError): ApiError => {
 const apiClient = createApiClient();
 
 /**
- * Ingest a PPT/PPTX file to the backend
- * @param file - The PowerPoint file to upload
+ * Ingest a PPT/PPTX file to the backend.
+ *
+ * @param file      - The PowerPoint file to upload.
+ * @param sessionId - Stable frontend session ID to associate with this ingestion.
+ *                    The same ID must be used for subsequent voice queries so the
+ *                    vector store can filter results by session.
  * @returns Promise with ingestion result
  */
-export const ingestPPT = async (file: File): Promise<IngestionResult> => {
+export const ingestPPT = async (file: File, sessionId?: string): Promise<IngestionResult> => {
   const formData = new FormData();
   formData.append("file", file);
+  if (sessionId) {
+    formData.append("session_id", sessionId);
+  }
 
   const response = await apiClient.post<IngestionResult>("/ingest", formData);
   return response.data;
