@@ -39,6 +39,14 @@
     --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
     --sidebar-border: oklch(0.925 0.005 214.3);
     --sidebar-ring: oklch(0.723 0.014 214.4);
+    /* Material Design 3 surface colors - light mode */
+    --surface-container: oklch(0.97 0.002 197.1);
+    --surface-container-low: oklch(0.98 0.002 197.1);
+    --surface-container-high: oklch(0.95 0.002 197.1);
+    --surface-container-highest: oklch(0.93 0.002 197.1);
+    --on-surface: oklch(0.148 0.004 228.8);
+    --on-surface-variant: oklch(0.45 0.017 213.2);
+    --outline-variant: oklch(0.85 0.005 214.3);
 }
 
 .dark {
@@ -73,6 +81,14 @@
     --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.56 0.021 213.5);
+    /* Material Design 3 surface colors - dark mode */
+    --surface-container: oklch(0.25 0.008 223.9);
+    --surface-container-low: oklch(0.21 0.008 223.9);
+    --surface-container-high: oklch(0.30 0.008 223.9);
+    --surface-container-highest: oklch(0.35 0.008 223.9);
+    --on-surface: oklch(0.987 0.002 197.1);
+    --on-surface-variant: oklch(0.723 0.014 214.4);
+    --outline-variant: oklch(0.35 0.008 223.9);
 }
 
 @theme inline {
@@ -116,6 +132,14 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+    /* Material Design 3 compatible surface colors */
+    --color-surface-container: var(--surface-container);
+    --color-surface-container-low: var(--surface-container-low);
+    --color-surface-container-high: var(--surface-container-high);
+    --color-surface-container-highest: var(--surface-container-highest);
+    --color-on-surface: var(--on-surface);
+    --color-on-surface-variant: var(--on-surface-variant);
+    --color-outline-variant: var(--outline-variant);
 }
 
 @layer base {
@@ -127,14 +151,26 @@
     }
   html {
     @apply font-sans;
+    transition: background-color 0.3s ease, color 0.3s ease;
     }
 }
 
+/* Theme transition utility class */
+.theme-transition {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
 
+/* Glass island - adapts to light/dark mode */
 .glass-island {
     background: rgba(49, 53, 55, 0.4);
     backdrop-filter: blur(24px);
     border: 1px solid rgba(211, 187, 255, 0.15);
+}
+
+/* Light mode glass island override */
+html:not(.dark) .glass-island {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .voice-wave {
