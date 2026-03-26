@@ -1,0 +1,67 @@
+import os
+import importlib
+import tempfile
+from typing import Optional, Any, Iterable
+
+from config.voice import VoiceConfig
+from utils.logger import logger
+
+
+class LocalWhisperTranscriber:
+    def __init__(self) -> None:
+        self._model: Any = None
+
+    def _get_model(self) -> Any:
+        if self._model is None:
+            try:
+                whisper_module = importlib.import_module("faster_whisper")
+                WhisperModel = getattr(whisper_module, "WhisperModel")
+            except Exception as exc:
+                logger.error(f"faster-whisper is not installed or failed to import: {exc}")
+                raise
+
+            logger.info(
+                "Loading Faster-Whisper model '%s' on device '%s' (%s)",
+                VoiceConfig.FASTER_WHISPER_MODEL,
+                VoiceConfig.FASTER_WHISPER_DEVICE,
+                VoiceConfig.FASTER_WHISPER_COMPUTE_TYPE,
+            )
+            self._model = WhisperModel(
+                VoiceConfig.FASTER_WHISPER_MODEL,
+                device=VoiceConfig.FASTER_WHISPER_DEVICE,
+                compute_type=VoiceConfig.FASTER_WHISPER_COMPUTE_TYPE,
+            )
+
+        return self._model
+
+    def transcribe_file_bytes(self, file_bytes: bytes, file_name: Optional[str] = None) -> str:
+        suffix = ".webm"
+        if file_name and "." in file_name:
+            suffix = f".{file_name.rsplit('.', 1)[-1].lower()}"
+
+        temp_path = ""
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(file_bytes)
+                temp_path = tmp.name
+
+            model = self._get_model()
+            segments, _ = model.transcribe(
+                temp_path,
+                beam_size=VoiceConfig.FASTER_WHISPER_BEAM_SIZE,
+                language=VoiceConfig.FASTER_WHISPER_LANGUAGE,
+            )
+
+            segment_list: Iterable[Any] = segments
+            transcript = " ".join(
+                str(getattr(segment, "text", "")).strip()
+                for segment in segment_list
+                if str(getattr(segment, "text", "")).strip()
+            ).strip()
+            return transcript
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
+
+
+local_whisper_transcriber = LocalWhisperTranscriber()
