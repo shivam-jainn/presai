@@ -1,19 +1,17 @@
-from typing import Any, AsyncGenerator
+from typing import Any
 import json
+import asyncio
 from pathlib import Path
 from datetime import timedelta
 from uuid import uuid4
-from fastapi import APIRouter, File, UploadFile, HTTPException, Request, Form, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, File, UploadFile, HTTPException, Query
 from pydantic import BaseModel, Field
 from livekit import api as livekit_api
 from config.voice import VoiceConfig
-from services.ingestion.pipeline import IngestionPipeline
 from services.voice.retrieval import run_voice_slide_query
 from services.voice.transcriber import local_whisper_transcriber
-from services.events import event_manager, EventType, emit_voice_event, emit_ingestion_event, event_stream_generator
+from services.events import EventType, emit_voice_event
 from utils.logger import logger
-from utils.storage import storage
 
 router = APIRouter()
 
@@ -23,6 +21,8 @@ class VoiceQueryRequest(BaseModel):
     filename: str = Field(min_length=1)
     session_id: str | None = None
     top_k: int = Field(default=5, ge=1, le=20)
+    current_slide: int | None = None   # caller's current slide for next/prev commands
+    total_slides: int | None = None    # total deck size for boundary clamping
 
 
 class VoiceQueryResponse(BaseModel):
@@ -48,107 +48,13 @@ class VoiceLivekitTokenResponse(BaseModel):
     room_name: str
     identity: str
 
-@router.get("/events/{session_id}")
-async def stream_events(session_id: str):
-    """
-    Server-Sent Events endpoint for real-time progress updates.
-    Clients connect here to receive voice processing, ingestion, and other events.
-    """
-    async def on_connect():
-        logger.info(f"Client connected to event stream: {session_id}")
-    
-    async def on_disconnect():
-        logger.info(f"Client disconnected from event stream: {session_id}")
-    
-    return StreamingResponse(
-        event_stream_generator(session_id, on_connect, on_disconnect),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
-@router.post("/ingest")
-async def ingest_ppt_route(request: Request, file: UploadFile = File(...), session_id: str | None = Form(None)):
-    filename = Path(file.filename or "").name
-    extension = Path(filename).suffix.lower()
-
-    if not filename:
-        raise HTTPException(status_code=400, detail="Missing file name.")
-
-    if extension not in {".ppt", ".pptx"}:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type: {filename}. Only PPT/PPTX files are allowed."
-        )
-    
-    # Use provided session_id or generate a new one
-    ingestion_session_id = session_id or str(uuid4())
-    
-    try:
-        # Emit ingestion start event
-        await emit_ingestion_event(
-            EventType.INGESTION_START,
-            ingestion_session_id,
-            {"filename": filename, "status": "started"}
-        )
-        
-        file.filename = filename
-        logger.info(f"Incoming ingest request for file: {filename}")
-        pipeline = IngestionPipeline()
-        result = await pipeline.ingest(file, ingestion_session_id=ingestion_session_id)
-
-        # Emit ingestion complete event
-        await emit_ingestion_event(
-            EventType.INGESTION_COMPLETE,
-            ingestion_session_id,
-            {
-                "filename": filename,
-                "status": "completed",
-                "total_slides": result.get("total_slides", 0),
-            }
-        )
-
-        result["file_url"] = str(request.url_for("get_ppt_file", filename=result["filename"]))
-        result["session_id"] = ingestion_session_id
-        return result
-    except Exception as e:
-        # Emit ingestion error event
-        await emit_ingestion_event(
-            EventType.INGESTION_ERROR,
-            ingestion_session_id,
-            {"filename": filename, "error": str(e)}
-        )
-        
-        logger.error(f"Ingestion route failed for {filename}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred during PPT ingestion: {str(e)}"
-        )
-
-@router.get("/file/{filename}")
-async def get_ppt_file(filename: str):
-    """Serve the uploaded PPTX file for rendering in the frontend."""
-    try:
-        file_path = storage.get_file_path(filename)
-        return FileResponse(
-            path=file_path,
-            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            filename=filename
-        )
-    except FileNotFoundError as e:
-        logger.error(f"File not found: {filename}")
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error serving file {filename}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/voice/query", response_model=VoiceQueryResponse)
 async def query_voice_navigation(payload: VoiceQueryRequest):
+    """
+    Process a voice query and return recommended slide navigation.
+    Searches through ingested presentation content to find relevant slides.
+    """
     question = payload.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
@@ -159,6 +65,8 @@ async def query_voice_navigation(payload: VoiceQueryRequest):
             filename=payload.filename,
             session_id=payload.session_id,
             top_k=payload.top_k,
+            current_slide=payload.current_slide,
+            total_slides=payload.total_slides,
         )
 
         return VoiceQueryResponse(
@@ -184,7 +92,18 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
     Generate LiveKit token for voice room connection.
     Works in both 'local' and 'agentkit_live' modes.
     In 'local' mode, connects to local LiveKit server for STT processing.
+    
+    Note: Each call creates a new participant identity for the same room.
+    LiveKit will automatically manage job spawning when participants join.
     """
+    logger.info("\n" + "="*80)
+    logger.info(f"🎫 TOKEN REQUEST RECEIVED")
+    logger.info(f"   Filename: {payload.filename}")
+    logger.info(f"   Session ID: {payload.session_id}")
+    logger.info(f"   VOICE_MODE: {VoiceConfig.MODE}")
+    logger.info(f"   LIVEKIT_URL: {VoiceConfig.LIVEKIT_URL}")
+    logger.info(f"{'='*80}")
+    
     # Support both modes - local uses local LiveKit server, agentkit_live uses cloud
     if VoiceConfig.MODE == "agentkit_live":
         # Cloud mode - requires full LiveKit credentials
@@ -221,6 +140,10 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
     api_key = VoiceConfig.LIVEKIT_API_KEY or "devkey"
     api_secret = VoiceConfig.LIVEKIT_API_SECRET or "devsecretdevsecretdevsecretdevsec"
 
+    logger.info(f"📝 Generating token for room: {room_name}, identity: {identity}")
+    logger.debug(f"   Metadata: {metadata}")
+    logger.debug(f"   Attributes: filename={filename}, session_id={payload.session_id or ''}, role=ui_client")
+
     token = (
         livekit_api.AccessToken(api_key, api_secret)
         .with_identity(identity)
@@ -246,16 +169,24 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
         .to_jwt()
     )
 
-    # Emit voice start event
-    await emit_voice_event(
-        EventType.VOICE_START,
-        payload.session_id or room_name,
-        {
-            "room_name": room_name,
-            "identity": identity,
-            "mode": VoiceConfig.MODE,
-        }
+    logger.info(f"✅ Token generated successfully")
+    logger.debug(f"   Token TTL: {VoiceConfig.LIVEKIT_TOKEN_TTL_SECONDS}s")
+    logger.debug(f"   Room prefix: {VoiceConfig.LIVEKIT_ROOM_PREFIX}")
+    
+    # Emit voice start event (non-blocking, don't wait)
+    asyncio.create_task(
+        emit_voice_event(
+            EventType.VOICE_START,
+            payload.session_id or room_name,
+            {
+                "room_name": room_name,
+                "identity": identity,
+                "mode": VoiceConfig.MODE,
+            }
+        )
     )
+
+    logger.info(f"{'='*80}\n")
 
     return VoiceLivekitTokenResponse(
         token=token,
@@ -267,7 +198,19 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
 
 @router.post("/voice/transcribe", response_model=VoiceTranscribeResponse)
 async def transcribe_voice_audio(file: UploadFile = File(...)):
+    """
+    Transcribe audio file using local Whisper model.
+    Only available in 'local' mode.
+    """
+    logger.info("\n" + "="*80)
+    logger.info("🎤 TRANSCRIBE API CALLED")
+    logger.info(f"   Filename: {file.filename}")
+    logger.info(f"   Content-Type: {file.content_type}")
+    logger.info(f"   VOICE_MODE: {VoiceConfig.MODE}")
+    logger.info(f"{'='*80}")
+    
     if VoiceConfig.MODE != "local":
+        logger.error("❌ Transcription disabled - VOICE_MODE=%s", VoiceConfig.MODE)
         raise HTTPException(
             status_code=409,
             detail="Voice transcription is disabled in current mode. Use agentkit_live runtime for production.",
@@ -280,16 +223,25 @@ async def transcribe_voice_audio(file: UploadFile = File(...)):
 
     try:
         raw_bytes = await file.read()
+        logger.info(f"📥 Audio file read | size={len(raw_bytes)} bytes")
+        
         if not raw_bytes:
+            logger.error("❌ Audio payload is empty")
             raise HTTPException(status_code=400, detail="Audio payload is empty.")
 
+        logger.info("🎙️ Starting transcription with Faster-Whisper...")
         transcript = local_whisper_transcriber.transcribe_file_bytes(raw_bytes, file_name=file_name)
+        
         if not transcript:
+            logger.error("❌ No speech detected in audio")
             raise HTTPException(status_code=422, detail="Unable to detect speech in audio.")
+        
+        logger.info("✅ Transcription successful: %r", transcript[:100] if len(transcript) > 100 else transcript)
+        logger.info(f"{'='*80}\n")
 
         return VoiceTranscribeResponse(transcript=transcript, mode=VoiceConfig.MODE)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Voice transcription failed: {e}")
+        logger.exception("❌ Transcription failed with exception: %s", e)
         raise HTTPException(status_code=500, detail=f"Voice transcription failed: {str(e)}")
