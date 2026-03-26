@@ -1,10 +1,9 @@
 import { motion } from "motion/react";
 import { Upload, LogOut, FileText } from "lucide-react";
+import { useSlideStore } from "../../../lib/store";
 
 export default function TopBar() {
-  const topBarData = {
-    fileName: "My Presentation Deck"
-  };
+  const { fileName, requestUploadPicker } = useSlideStore();
 
   return (
     <header className="fixed top-0 w-full z-50 flex justify-between items-center px-8 py-4 bg-background/80 backdrop-blur-md border-b border-outline-variant/10">
@@ -12,11 +11,11 @@ export default function TopBar() {
         <span className="text-primary font-black tracking-tighter text-xl font-figtree">
           Presentation Studio
         </span>
-        <div className="h-4 w-[1px] bg-outline-variant/30 hidden md:block" />
+        <div className="h-4 w-px bg-outline-variant/30 hidden md:block" />
         <div className="hidden md:flex items-center gap-2 text-on-surface-variant">
           <FileText className="w-4 h-4 text-primary" />
           <span className="font-medium text-sm tracking-tight">
-            {topBarData.fileName}
+            {fileName || "No deck uploaded"}
           </span>
         </div>
       </div>
@@ -34,6 +33,7 @@ export default function TopBar() {
         <motion.button 
           whileHover={{ scale: 1.02, boxShadow: "0 0 20px rgba(211, 187, 255, 0.3)" }}
           whileTap={{ scale: 0.98 }}
+          onClick={requestUploadPicker}
           className="flex items-center gap-2 bg-primary text-on-primary px-5 py-2 rounded-lg font-bold text-sm tracking-wide transition-all duration-200 shadow-lg shadow-primary/10"
         >
           <Upload className="w-4 h-4" />

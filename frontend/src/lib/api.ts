@@ -26,6 +26,7 @@ export interface IngestionResult {
   status: string;
   chunks_stored: number;
   filename: string;
+  file_url?: string;
   slides?: Record<number, string[]>;
   total_slides?: number;
 }
