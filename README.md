@@ -13,18 +13,21 @@ Navigate slides using voice commands. Built with FastAPI + React + LiveKit.
 ## Quick Start
 
 ```bash
-# 1. Start infrastructure
+# 1. Start infrastructure (Qdrant + LiveKit)
 make infra-up
 
-# 2. Backend
+# 2. Backend setup & run
 cd backend
 cp .env.example .env
 # Add GROQ_API_KEY (get free key at https://console.groq.com/keys)
-uv run python main.py
+cd ..
+make backend-api
 
 # 3. Frontend (new terminal)
-cd frontend
-npm install && npm run dev
+make frontend
+
+#4. Start the worker
+make worker
 ```
 
 Open **http://localhost:5173**
@@ -60,11 +63,17 @@ Open **http://localhost:5173**
 ## Troubleshooting
 
 ```bash
-# Ports in use
-lsof -ti:8000 | xargs kill -9
+# Check running services
+docker ps
 
-# Restart infra
+# View all logs
+make infra-logs
+
+# Restart everything
 make infra-down && make infra-up
+
+# Free up ports
+lsof -ti:8000 | xargs kill -9
 ```
 
 ## Links
