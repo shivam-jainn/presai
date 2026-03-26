@@ -13,7 +13,7 @@ infra-logs:
 	cd backend && docker compose logs -f livekit vectordb
 
 backend-api:
-	cd backend && source .venv/bin/activate && uvicorn main:app --reload --port 8000
+	cd backend && source .venv/bin/activate && python startup.py
 
 worker:
 	cd backend && source .venv/bin/activate && python -m agents.slide_voice_worker dev

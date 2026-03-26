@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import json
 import sys
@@ -15,7 +13,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from config.voice import VoiceConfig
+from config import config
 from services.events import EventType, emit_voice_event
 from services.voice.retrieval import run_voice_slide_query
 from utils.logger import logger
@@ -25,6 +23,7 @@ from utils.logger import logger
 # ──────────────────────────────────────────────────────────────────────────────
 
 RECOMMENDATION_TOPIC = "presai.slide.recommendation"
+BACKEND_API_URL = "http://localhost:8000"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -94,10 +93,12 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     # Derive the session ID from the room name (matches what the token endpoint
     # encodes: presai-voice-{session_id}).
     room_name = ctx.room.name if ctx.room else ""
-    session_id = room_name.replace(f"{VoiceConfig.LIVEKIT_ROOM_PREFIX}-", "", 1) or "unknown"
+    session_id = room_name.replace(f"{config.LIVEKIT_ROOM_PREFIX}-", "", 1) or "unknown"
 
     logger.info("Worker starting | run_id=%s room=%s session_id=%s", run_id, room_name, session_id)
-
+    
+    logger.info("Worker initialization complete")
+    
     await ctx.connect(auto_subscribe=agents.AutoSubscribe.AUDIO_ONLY)
     logger.info("Worker connected | room=%s", ctx.room.name)
 
@@ -139,8 +140,26 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     # Maps participant identity → latest turn_id so stale tasks are dropped.
     latest_turn_id: dict[str, int] = {}
 
-    stt_plugin = deepgram.STT(model="nova-3", language="en")
-    logger.info("STT plugin initialized | model=deepgram/nova-3 language=en")
+    # Initialize STT based on configured provider
+    stt_config = config.stt_config
+    if stt_config["provider"] == "deepgram":
+        stt_plugin = deepgram.STT(
+            model=stt_config.get("model", "nova-3"),
+            language="en",
+            api_key=stt_config.get("api_key"),
+        )
+        logger.info("STT plugin initialized | provider=deepgram model=%s api_key_set=%s", 
+                     stt_config.get("model"), bool(stt_config.get("api_key")))
+    else:
+        # Groq STT - use the livekit groq plugin
+        from livekit.plugins import groq as groq_plugin
+        stt_plugin = groq_plugin.STT(
+            model=stt_config.get("model", "whisper-large-v3"),
+            language="en",
+            api_key=stt_config.get("api_key"),
+        )
+        logger.info("STT plugin initialized | provider=groq model=%s api_key_set=%s",
+                    stt_config.get("model"), bool(stt_config.get("api_key")))
 
     session: agents.AgentSession[Any] = agents.AgentSession(
         stt=stt_plugin,
@@ -318,7 +337,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     session.on("close", on_session_closed)
 
     try:
-        logger.info("Starting voice session | room=%s stt=deepgram/nova-3", ctx.room.name)
+        logger.info("Starting voice session | room=%s stt=%s/%s", ctx.room.name, stt_config["provider"], stt_config.get("model", "unknown"))
         await session.start(agent=PresAIAgent(), room=ctx.room)
         logger.info("Voice session started — listening for speech")
         await asyncio.Event().wait()

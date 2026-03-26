@@ -3,7 +3,7 @@ import importlib
 import tempfile
 from typing import Optional, Any, Iterable
 
-from config.voice import VoiceConfig
+from config import config
 from utils.logger import logger
 
 
@@ -22,14 +22,14 @@ class LocalWhisperTranscriber:
 
             logger.info(
                 "Loading Faster-Whisper model '%s' on device '%s' (%s)",
-                VoiceConfig.FASTER_WHISPER_MODEL,
-                VoiceConfig.FASTER_WHISPER_DEVICE,
-                VoiceConfig.FASTER_WHISPER_COMPUTE_TYPE,
+                config.WHISPER_MODEL,
+                config.WHISPER_DEVICE,
+                config.WHISPER_COMPUTE_TYPE,
             )
             self._model = WhisperModel(
-                VoiceConfig.FASTER_WHISPER_MODEL,
-                device=VoiceConfig.FASTER_WHISPER_DEVICE,
-                compute_type=VoiceConfig.FASTER_WHISPER_COMPUTE_TYPE,
+                config.WHISPER_MODEL,
+                device=config.WHISPER_DEVICE,
+                compute_type=config.WHISPER_COMPUTE_TYPE,
             )
             logger.info("Faster-Whisper model loaded successfully")
 

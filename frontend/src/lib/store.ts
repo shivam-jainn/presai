@@ -19,6 +19,7 @@ interface SlideState {
   isIngesting: boolean;
   ingestionStatus: IngestionStatus;
   ingestionError: string | null;
+  isPresentationReady: boolean;
   
   // Voice AI state
   isListening: boolean;
@@ -45,6 +46,7 @@ interface SlideState {
   requestUploadPicker: () => void;
   setIngesting: (ingesting: boolean) => void;
   setIngestionStatus: (status: IngestionStatus, error?: string) => void;
+  setIsPresentationReady: (ready: boolean) => void;
   setListening: (listening: boolean) => void;
   setLatestVoiceTurnId: (turnId: number) => void;
   setVoiceThinking: (thinking: boolean) => void;
@@ -92,6 +94,7 @@ const initialState = {
   isIngesting: false,
   ingestionStatus: "idle" as IngestionStatus,
   ingestionError: null,
+  isPresentationReady: false,
   isListening: false,
   latestVoiceTurnId: 0,
   isVoiceThinking: false,
@@ -128,7 +131,11 @@ export const useSlideStore = create<SlideState>((set) => ({
       ingestionStatus: status, 
       ingestionError: error || null,
       isIngesting: status === "ingesting",
+      isPresentationReady: status === "success",
     }),
+  
+  setIsPresentationReady: (ready) =>
+    set({ isPresentationReady: ready }),
   
   setListening: (listening) =>
     set({ isListening: listening }),
@@ -170,7 +177,7 @@ export const useSlideStore = create<SlideState>((set) => ({
   
   reset: () => {
     const currentTheme = useSlideStore.getState().theme;
-    set({ ...initialState, theme: currentTheme, voiceSessionId: VOICE_SESSION_ID });
+    set({ ...initialState, theme: currentTheme, voiceSessionId: VOICE_SESSION_ID, isPresentationReady: false });
   },
 }));
 

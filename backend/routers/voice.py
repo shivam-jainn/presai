@@ -7,11 +7,12 @@ from uuid import uuid4
 from fastapi import APIRouter, File, UploadFile, HTTPException, Query
 from pydantic import BaseModel, Field
 from livekit import api as livekit_api
-from config.voice import VoiceConfig
+from config import config
 from services.voice.retrieval import run_voice_slide_query
 from services.voice.transcriber import local_whisper_transcriber
 from services.events import EventType, emit_voice_event
 from utils.logger import logger
+from utils.voice_worker_monitor import VoiceWorkerMonitor
 
 router = APIRouter()
 
@@ -52,6 +53,35 @@ class VoiceLivekitTokenResponse(BaseModel):
     ws_url: str
     room_name: str
     identity: str
+
+
+class WorkerHeartbeatRequest(BaseModel):
+    status: str = "alive"
+    timestamp: float
+
+
+@router.post("/worker/heartbeat")
+async def worker_heartbeat(payload: WorkerHeartbeatRequest):
+    """
+    Receive heartbeat from voice worker to confirm it's alive.
+    This endpoint is called every 60 seconds by the worker.
+    """
+    logger.debug(f"Worker heartbeat received | status={payload.status} timestamp={payload.timestamp}")
+    
+    # Record the heartbeat
+    VoiceWorkerMonitor.record_heartbeat()
+    
+    return {"status": "ok", "message": "Heartbeat received"}
+
+
+@router.get("/worker/status")
+async def get_worker_status():
+    """
+    Get current voice worker health status.
+    Returns whether worker is alive based on heartbeats.
+    """
+    status = VoiceWorkerMonitor.get_status()
+    return status
 
 
 @router.post("/voice/query", response_model=VoiceQueryResponse)
@@ -103,16 +133,16 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
     """
     
     # Support both modes - local uses local LiveKit server, agentkit_live uses cloud
-    if VoiceConfig.MODE == "agentkit_live":
+    if config.VOICE_MODE == "agentkit_live":
         # Cloud mode - requires full LiveKit credentials
-        if not (VoiceConfig.LIVEKIT_URL and VoiceConfig.LIVEKIT_API_KEY and VoiceConfig.LIVEKIT_API_SECRET):
+        if not (config.LIVEKIT_URL and config.LIVEKIT_API_KEY and config.LIVEKIT_API_SECRET):
             raise HTTPException(
                 status_code=500,
                 detail="LiveKit credentials are not configured on the server.",
             )
-    elif VoiceConfig.MODE == "local":
+    elif config.VOICE_MODE == "local":
         # Local mode - can use dev credentials or local server
-        if not VoiceConfig.LIVEKIT_URL:
+        if not config.LIVEKIT_URL:
             raise HTTPException(
                 status_code=500,
                 detail="Local LiveKit server URL not configured.",
@@ -120,13 +150,13 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
     else:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid VOICE_MODE: {VoiceConfig.MODE}. Must be 'local' or 'agentkit_live'.",
+            detail=f"Invalid VOICE_MODE: {config.VOICE_MODE}. Must be 'local' or 'agentkit_live'.",
         )
 
     filename = Path(payload.filename).name
     room_key = payload.session_id or filename
     safe_room_key = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in room_key)[:80]
-    room_name = f"{VoiceConfig.LIVEKIT_ROOM_PREFIX}-{safe_room_key}".strip("-")
+    room_name = f"{config.LIVEKIT_ROOM_PREFIX}-{safe_room_key}".strip("-")
     identity = f"presai-ui-{uuid4().hex[:12]}"
 
     # Stable session ID used for vector-store queries (must match ingestion session).
@@ -139,8 +169,8 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
     }
 
     # For local mode, use dev credentials if available
-    api_key = VoiceConfig.LIVEKIT_API_KEY or "devkey"
-    api_secret = VoiceConfig.LIVEKIT_API_SECRET or "devsecretdevsecretdevsecretdevsec"
+    api_key = config.LIVEKIT_API_KEY or "devkey"
+    api_secret = config.LIVEKIT_API_SECRET or "devsecretdevsecretdevsecretdevsec"
 
     logger.info("Generating LiveKit token | room=%s identity=%s query_session=%s",
                 room_name, identity, effective_query_session_id)
@@ -167,12 +197,12 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
                 "role": "ui_client",
             }
         )
-        .with_ttl(timedelta(seconds=VoiceConfig.LIVEKIT_TOKEN_TTL_SECONDS))
+        .with_ttl(timedelta(seconds=config.LIVEKIT_TOKEN_TTL_SECONDS))
         .to_jwt()
     )
 
     logger.info("LiveKit token generated successfully | ttl=%ds prefix=%s", 
-                VoiceConfig.LIVEKIT_TOKEN_TTL_SECONDS, VoiceConfig.LIVEKIT_ROOM_PREFIX)
+                config.LIVEKIT_TOKEN_TTL_SECONDS, config.LIVEKIT_ROOM_PREFIX)
     
     # Emit voice start event on the room-derived channel (matches what the worker uses).
     asyncio.create_task(
@@ -182,14 +212,14 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
             {
                 "room_name": room_name,
                 "identity": identity,
-                "mode": VoiceConfig.MODE,
+                "mode": config.VOICE_MODE,
             }
         )
     )
 
     return VoiceLivekitTokenResponse(
         token=token,
-        ws_url=VoiceConfig.LIVEKIT_URL,
+        ws_url=config.LIVEKIT_URL,
         room_name=room_name,
         identity=identity,
     )
@@ -202,10 +232,10 @@ async def transcribe_voice_audio(file: UploadFile = File(...)):
     Only available in 'local' mode.
     """
     logger.info("Transcribe API called | filename=%s content_type=%s mode=%s", 
-                file.filename, file.content_type, VoiceConfig.MODE)
+                file.filename, file.content_type, config.VOICE_MODE)
     
-    if VoiceConfig.MODE != "local":
-        logger.error("Transcription disabled - VOICE_MODE=%s", VoiceConfig.MODE)
+    if config.VOICE_MODE != "local":
+        logger.error("Transcription disabled - VOICE_MODE=%s", config.VOICE_MODE)
         raise HTTPException(
             status_code=409,
             detail="Voice transcription is disabled in current mode. Use agentkit_live runtime for production.",

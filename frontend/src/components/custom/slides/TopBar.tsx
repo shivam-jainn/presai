@@ -5,8 +5,11 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { useEffect } from "react";
 
 export default function TopBar() {
-  const { fileName, requestUploadPicker, theme, setTheme } = useSlideStore();
+  const { fileName, requestUploadPicker, theme, setTheme, isPresentationReady, isIngesting } = useSlideStore();
   const { signOut } = useAuth();
+
+  // Force visibility during ingestion or until presentation is ready
+  const shouldForceVisibility = isIngesting || !isPresentationReady;
 
   // Apply theme class on mount
   useEffect(() => {
@@ -32,7 +35,7 @@ export default function TopBar() {
   };
 
   return (
-    <header className="fixed top-0 w-full z-50 flex justify-between items-center px-8 py-4 bg-background/90 backdrop-blur-md border-b border-outline-variant/10 opacity-0 hover:opacity-100 transition-opacity duration-300">
+    <header className="fixed top-0 w-full z-50 flex justify-between items-center px-8 py-4 bg-background/90 backdrop-blur-md border-b border-outline-variant/10 opacity-0 hover:opacity-100 transition-opacity duration-300" style={{ opacity: shouldForceVisibility ? 1 : undefined }}>
       <div className="flex items-center gap-6">
         <span className="text-primary font-black tracking-tighter text-xl font-figtree">
           Presai.
