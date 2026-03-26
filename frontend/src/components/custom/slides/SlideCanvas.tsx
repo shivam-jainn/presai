@@ -32,6 +32,7 @@ export default function SlideCanvas() {
     currentSlide,
     totalSlides,
     uploadPickerRequest,
+    voiceSessionId,
     setFileUploaded,
     setPptUrl,
     setIngestionSessionId,
@@ -120,7 +121,7 @@ export default function SlideCanvas() {
       setFileUploaded(true, file.name);
       setIngestionStatus("ingesting");
 
-      const result = await ingestPPT(file);
+      const result = await ingestPPT(file, voiceSessionId);
       setSlideContent(result.slides ?? {});
       const localRenderedSlides = previewRef.current?.slideCount ?? 0;
       setTotalSlides(Math.max(localRenderedSlides, result.total_slides ?? 0));
@@ -163,9 +164,9 @@ export default function SlideCanvas() {
   };
 
   return (
-    <main className="min-h-screen pt-24 pb-40 px-6 flex flex-col items-center justify-center">
+    <main className="h-full pt-48 pb-32 px-6 flex flex-col items-center justify-center bg-neutral-50 dark:bg-neutral-950">
 
-      <div className="relative w-full max-w-6xl aspect-video group">
+      <div className="relative w-full max-w-9xl aspect-video group">
         <div className="absolute -inset-4 bg-primary/5 blur-3xl rounded-[2.5rem] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
 
         <motion.div
@@ -185,7 +186,7 @@ export default function SlideCanvas() {
             dragActive
               ? "border-primary/60 bg-primary/5"
               : "border-outline-variant/20 bg-surface-container-low"
-          } shadow-[0_24px_80px_rgba(0,0,0,0.6)]`}
+          } shadow-2xl`}
         >
           <input
             ref={inputRef}
@@ -211,28 +212,32 @@ export default function SlideCanvas() {
               </p>
             </div>
           )}
-<div
-  ref={containerRef}
-  className={`relative z-10 h-full w-full flex items-center justify-center overflow-hidden bg-white ${
-    isFileUploaded ? "flex" : "hidden"
-  }`}
->
-  <div
-    style={{
-      width: `${SLIDE_WIDTH}px`,
-      height: `${SLIDE_HEIGHT}px`,
-      transform: `scale(${scale})`,
-      transformOrigin: "center center",
-      position: "absolute", // CRITICAL: This pulls the giant element out of flex layout preventing container blowouts
-      top: "50%",
-      left: "50%",
-      marginLeft: `-${SLIDE_WIDTH / 2}px`, // Center horizontally based on unscaled width
-      marginTop: `-${SLIDE_HEIGHT / 2}px`, // Center vertically based on unscaled height
-    }}
-  >
-    <div ref={renderRef} className="w-full h-full" />
-  </div>
-</div>
+
+          <div
+            ref={containerRef}
+            className={`relative z-10 h-full w-full flex items-center justify-center overflow-hidden bg-neutral-100 dark:bg-neutral-900 ${
+              isFileUploaded ? "flex" : "hidden"
+            }`}
+          >
+            <div
+              style={{
+                width: `${SLIDE_WIDTH}px`,
+                height: `${SLIDE_HEIGHT}px`,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                marginTop: `-${(SLIDE_HEIGHT * scale) / 2}px`,
+                marginLeft: `-${(SLIDE_WIDTH * scale) / 2}px`,
+              }}
+            >
+              <div
+                ref={renderRef}
+                className="w-full h-full"
+              />
+            </div>
+          </div>
 
           <div className="absolute bottom-6 right-6 px-3 py-1.5 rounded-full bg-background/80 border border-outline-variant/20 text-xs font-semibold tracking-wide text-on-surface-variant z-20">
             {isIngesting
@@ -247,7 +252,7 @@ export default function SlideCanvas() {
       <div className="mt-8 flex flex-col items-center gap-2 min-h-10">
 
         {(localError || ingestionError) && (
-          <span className="font-inter text-red-400 text-xs font-semibold tracking-wide">
+          <span className="font-inter text-destructive text-xs font-semibold tracking-wide">
             {localError || ingestionError}
           </span>
         )}

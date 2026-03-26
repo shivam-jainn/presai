@@ -62,6 +62,8 @@ interface VoiceQueryOptions {
   filename: string;
   sessionId?: string | null;
   topK?: number;
+  currentSlide?: number;
+  totalSlides?: number;
   signal?: AbortSignal;
 }
 
@@ -180,6 +182,8 @@ export const queryVoiceSlide = async (
       filename: options.filename,
       session_id: options.sessionId || undefined,
       top_k: topK,
+      current_slide: options.currentSlide,
+      total_slides: options.totalSlides,
     },
     {
       signal: options.signal,

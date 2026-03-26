@@ -1,8 +1,13 @@
 import { create } from "zustand";
 
 export type IngestionStatus = "idle" | "ingesting" | "success" | "failed";
+export type Theme = "light" | "dark" | "system";
 
 interface SlideState {
+  // Stable session ID generated once per page load. Used for LiveKit room
+  // naming and SSE subscriptions so both channels always share the same key.
+  voiceSessionId: string;
+
   // File state
   isFileUploaded: boolean;
   fileName: string | null;
@@ -21,11 +26,17 @@ interface SlideState {
   isVoiceThinking: boolean;
   lastVoiceQuestion: string | null;
   lastVoiceMessage: string | null;
+  liveTranscript: string;
+  isTranscribing: boolean;
   
   // Slide navigation
   currentSlide: number;
   totalSlides: number;
   slideContent: Record<number, string[]>;
+
+  // Theme state
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
   
   // Actions
   setFileUploaded: (uploaded: boolean, fileName?: string) => void;
@@ -39,13 +50,40 @@ interface SlideState {
   setVoiceThinking: (thinking: boolean) => void;
   setLastVoiceQuestion: (question: string | null) => void;
   setLastVoiceMessage: (message: string | null) => void;
+  setLiveTranscript: (transcript: string) => void;
+  setTranscribing: (transcribing: boolean) => void;
   setCurrentSlide: (slide: number | ((prev: number) => number)) => void;
   setTotalSlides: (total: number) => void;
   setSlideContent: (content: Record<number, string[]>) => void;
   reset: () => void;
 }
 
+// Helper function to apply theme to document
+function applyTheme(theme: Theme) {
+  const root = document.documentElement;
+  if (theme === "dark") {
+    root.classList.add("dark");
+  } else if (theme === "light") {
+    root.classList.remove("dark");
+  } else if (theme === "system") {
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if (prefersDark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  }
+}
+
+function getInitialTheme(): Theme {
+  const stored = localStorage.getItem("presai-theme") as Theme | null;
+  return stored || "dark";
+}
+
+const VOICE_SESSION_ID = crypto.randomUUID();
+
 const initialState = {
+  voiceSessionId: VOICE_SESSION_ID,
   isFileUploaded: false,
   fileName: null,
   pptUrl: null,
@@ -59,9 +97,12 @@ const initialState = {
   isVoiceThinking: false,
   lastVoiceQuestion: null,
   lastVoiceMessage: null,
+  liveTranscript: "",
+  isTranscribing: false,
   currentSlide: 0,
   totalSlides: 0,
   slideContent: {},
+  theme: getInitialTheme(),
 };
 
 export const useSlideStore = create<SlideState>((set) => ({
@@ -103,6 +144,12 @@ export const useSlideStore = create<SlideState>((set) => ({
 
   setLastVoiceMessage: (message) =>
     set({ lastVoiceMessage: message }),
+
+  setLiveTranscript: (transcript) =>
+    set({ liveTranscript: transcript }),
+
+  setTranscribing: (transcribing) =>
+    set({ isTranscribing: transcribing }),
   
   setCurrentSlide: (slide) =>
     set((state) => ({
@@ -114,8 +161,21 @@ export const useSlideStore = create<SlideState>((set) => ({
   
   setSlideContent: (content) =>
     set({ slideContent: content }),
+
+  setTheme: (theme) => {
+    localStorage.setItem("presai-theme", theme);
+    applyTheme(theme);
+    set({ theme });
+  },
   
-  reset: () => set(initialState),
+  reset: () => {
+    const currentTheme = useSlideStore.getState().theme;
+    set({ ...initialState, theme: currentTheme, voiceSessionId: VOICE_SESSION_ID });
+  },
 }));
+
+if (typeof window !== "undefined") {
+  applyTheme(getInitialTheme());
+}
 
 export default useSlideStore;
