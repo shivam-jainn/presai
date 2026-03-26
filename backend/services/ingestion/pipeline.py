@@ -76,16 +76,10 @@ class IngestionPipeline:
                     "source_file_path": file_path,
                 })
             
-            logger.info("="*80)
-            logger.info("📝 DATA BEING STORED IN QDRANT:")
-            logger.info("="*80)
+            logger.info("Data stored in Qdrant | total_chunks=%d", len(payloads))
             for i, payload in enumerate(payloads, 1):
-                logger.info(f"\n[Chunk {i}]")
-                logger.info(f"   Slide Number: {payload['slide_number']}")
-                logger.info(f"   Text Content: {payload['text']}")
-                logger.info(f"   Filename: {payload['filename']}")
-                logger.info(f"   Session ID: {payload['session_id']}")
-            logger.info("="*80)
+                logger.info("Chunk %d | slide=%d text_length=%d", 
+                           i, payload['slide_number'], len(payload['text']))
             
             vector_store.upsert_embeddings(ids, all_vectors, payloads)
             

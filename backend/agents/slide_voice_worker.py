@@ -101,16 +101,6 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     await ctx.connect(auto_subscribe=agents.AutoSubscribe.AUDIO_ONLY)
     logger.info("Worker connected | room=%s", ctx.room.name)
 
-    # Notify the SSE bus that the voice assistant is connected.
-    try:
-        await emit_voice_event(
-            EventType.VOICE_CONNECTED,
-            session_id,
-            {"room_name": ctx.room.name, "status": "connected"},
-        )
-    except Exception:
-        pass
-
     participant: rtc.RemoteParticipant | None = None
 
     def _on_track_subscribed(
@@ -118,22 +108,15 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         pub: rtc.RemoteTrackPublication,
         remote: rtc.RemoteParticipant,
     ) -> None:
-        logger.info(
-            "🎵 Track subscribed | kind=%s mime=%s participant=%s track_sid=%s",
-            track.kind, pub.mime_type, remote.identity, track.sid,
-        )
-        logger.debug(
-            "   Track details: muted=%s attached=%s",
-            track.muted, pub.is_attached()
-        )
+        logger.info("Track subscribed | kind=%s mime=%s participant=%s track_sid=%s",
+                    track.kind, pub.mime_type, remote.identity, track.sid)
 
     def _on_track_subscription_failed(sid: str, remote: rtc.RemoteParticipant) -> None:
         logger.error("Track subscription failed | sid=%s participant=%s", sid, remote.identity)
 
     def _on_participant_connected(remote: rtc.RemoteParticipant) -> None:
         nonlocal participant
-        logger.info("👤 Participant connected | identity=%s sid=%s", remote.identity, remote.sid)
-        logger.debug("   Attributes: %s", remote.attributes)
+        logger.info("Participant connected | identity=%s sid=%s", remote.identity, remote.sid)
         participant = remote
 
     def _on_participant_disconnected(remote: rtc.RemoteParticipant) -> None:
@@ -142,13 +125,11 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             remote.identity,
         )
 
-    ctx.room.on("track_subscribed", _on_track_subscribed)
-    ctx.room.on("track_subscription_failed", _on_track_subscription_failed)
     ctx.room.on("participant_connected", _on_participant_connected)
     ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
     participant = await ctx.wait_for_participant()
-    logger.info("✅ Participant joined | identity=%s", participant.identity)
+    logger.info("Participant joined | identity=%s", participant.identity)
 
     # ── Turn tracking ────────────────────────────────────────────────────────
 
@@ -157,14 +138,13 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     latest_turn_id: dict[str, int] = {}
 
     stt_plugin = deepgram.STT(model="nova-3", language="en")
-    logger.info("🎙️ STT plugin initialized | model=deepgram/nova-3 language=en")
+    logger.info("STT plugin initialized | model=deepgram/nova-3 language=en")
 
     session: agents.AgentSession[Any] = agents.AgentSession(
         stt=stt_plugin,
         # STT-only mode — no LLM or TTS required.
         preemptive_generation=False,
     )
-    logger.debug("   AgentSession created | preemptive_generation=False")
 
     async def _publish(target: rtc.RemoteParticipant, payload: dict[str, Any]) -> None:
         """Publish a JSON payload to a single participant on the recommendation topic."""
@@ -186,7 +166,6 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 
         # Drop if a newer turn superseded this one.
         if latest_turn_id.get(target.identity) != turn_id:
-            logger.debug("Dropping stale turn_id=%d for %s", turn_id, target.identity)
             return
 
         if not filename:
@@ -255,7 +234,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             payload = {"type": "error", "message": str(exc), "turn_id": turn_id}
             logger.warning("LookupError during slide query | %s", exc)
         except Exception:
-            logger.exception("Slide query failed for transcript=%r", transcript)
+            logger.exception("Slide query failed | transcript=%r", transcript)
             payload = {
                 "type": "error",
                 "message": "Failed to compute slide recommendation.",
@@ -271,17 +250,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     def on_user_input_transcribed(event: agents.UserInputTranscribedEvent) -> None:
         nonlocal turn_counter
         
-        logger.debug("\n" + "="*80)
-        logger.debug("🎤 TRANSCRIPTION EVENT RECEIVED")
-        logger.debug(f"   Speaker ID: {event.speaker_id or '?'}")
-        logger.debug(f"   Is Final: {event.is_final}")
-        logger.debug(f"   Transcript: {repr(event.transcript[:100] if len(event.transcript) > 100 else event.transcript)}")
-        logger.debug(f"   Raw event attrs: {dir(event)}")
-        logger.debug("="*80)
-
         # Relay intermediate transcripts to SSE for the live overlay.
         if not event.is_final:
-            logger.debug("   → Intermediate transcript (not final)")
             try:
                 asyncio.create_task(
                     emit_voice_event(
@@ -294,17 +264,15 @@ async def entrypoint(ctx: agents.JobContext) -> None:
                         },
                     )
                 )
-                logger.debug("   ✓ SSE event dispatched for intermediate transcript")
             except Exception as e:
-                logger.error("   ✗ Failed to emit SSE event: %s", e)
+                logger.error("Failed to emit SSE event for intermediate transcript: %s", e)
             return
 
         transcript = event.transcript.strip()
         if not transcript:
-            logger.debug("⚠️ Empty final transcript received — skipping")
             return
 
-        logger.info("✅ Final transcript | speaker=%s text=%r", event.speaker_id or "?", transcript)
+        logger.info("Final transcript | speaker=%s text=%r", event.speaker_id or "?", transcript)
 
         # Resolve target participant (falls back to first joiner).
         speaker = (
@@ -312,15 +280,11 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             if event.speaker_id
             else None
         )
-        logger.debug("   Resolving target participant: speaker=%s fallback=%s", 
-                    speaker.identity if speaker else None, 
-                    participant.identity if participant else None)
         target = speaker or participant
         if target is None:
-            logger.warning("❌ No target participant — dropping transcript")
+            logger.warning("No target participant — dropping transcript")
             return
 
-        logger.debug("   📡 Emitting final transcript to SSE...")
         try:
             asyncio.create_task(
                 emit_voice_event(
@@ -333,20 +297,16 @@ async def entrypoint(ctx: agents.JobContext) -> None:
                     },
                 )
             )
-            logger.debug("   ✓ SSE event dispatched for final transcript")
         except Exception as e:
-            logger.error("   ✗ Failed to emit final SSE event: %s", e)
+            logger.error("Failed to emit final SSE event: %s", e)
 
         turn_counter += 1
         turn_id = turn_counter
         latest_turn_id[target.identity] = turn_id
-        logger.debug("   Turn counter incremented: turn_id=%d", turn_id)
 
-        logger.debug("   🚀 Spawning publish_recommendation task...")
         asyncio.create_task(
             publish_recommendation(target, transcript, turn_id=turn_id)
         )
-        logger.debug("="*80 + "\n")
 
     def on_session_closed(_: agents.CloseEvent) -> None:
         logger.info("Agent session closed — shutting down worker")
@@ -356,13 +316,12 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     session.on("close", on_session_closed)
 
     try:
-        logger.info("🚀 Starting voice session | room=%s stt=deepgram/nova-3", ctx.room.name)
+        logger.info("Starting voice session | room=%s stt=deepgram/nova-3", ctx.room.name)
         await session.start(agent=PresAIAgent(), room=ctx.room)
-        logger.info("✅ Voice session started — listening for speech")
-        logger.info("   Session will process audio from subscribed tracks...")
+        logger.info("Voice session started — listening for speech")
         await asyncio.Event().wait()
     except Exception:
-        logger.exception("❌ Voice agent session crashed | room=%s", ctx.room.name)
+        logger.exception("Voice agent session failed | room=%s", ctx.room.name)
         raise
 
 

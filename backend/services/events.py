@@ -109,7 +109,6 @@ class EventManager:
                 self._subscribers[session_id] = []
             self._subscribers[session_id].append(queue)
             
-        logger.debug(f"New subscriber for session {session_id}")
         return queue
     
     async def unsubscribe(self, session_id: str, queue: asyncio.Queue) -> None:
@@ -124,20 +123,15 @@ class EventManager:
                 # Clean up empty session entries
                 if not self._subscribers[session_id]:
                     del self._subscribers[session_id]
-        
-        logger.debug(f"Unsubscribed from session {session_id}")
     
     async def publish(self, event: Event) -> None:
         """
         Publish an event to all subscribers of the session.
         Non-blocking - uses put_nowait with error handling.
         """
-        logger.debug("📢 Publishing event | type=%s session=%s subscribers=%d", 
-                    event.type.value, event.session_id, self.get_subscriber_count(event.session_id))
-        
         async with self._lock:
             if event.session_id not in self._subscribers:
-                logger.warning("⚠️ No subscribers for session %s", event.session_id)
+                logger.warning("No subscribers for session %s", event.session_id)
                 return
             
             queues_to_remove = []
@@ -145,13 +139,12 @@ class EventManager:
             for queue in self._subscribers[event.session_id]:
                 try:
                     queue.put_nowait(event)
-                    logger.debug("   ✓ Event queued successfully (queue_size=%d)", queue.qsize())
                 except asyncio.QueueFull:
                     # Queue is full, mark for removal
-                    logger.warning("✗ Queue full for session %s", event.session_id)
+                    logger.warning("Queue full for session %s", event.session_id)
                     queues_to_remove.append(queue)
                 except Exception as e:
-                    logger.error("✗ Error publishing event: %s", e)
+                    logger.error("Error publishing event: %s", e)
                     queues_to_remove.append(queue)
             
             # Clean up problematic queues
@@ -173,8 +166,6 @@ class EventManager:
         Returns the created event.
         """
         event = Event(event_type, data, session_id, priority)
-        logger.debug("🎯 Event created | type=%s session=%s data_keys=%s", 
-                    event_type.value, session_id, list(data.keys()))
         await self.publish(event)
         return event
     
@@ -195,7 +186,6 @@ async def emit_voice_event(
     priority: EventPriority = EventPriority.NORMAL,
 ) -> Event:
     """Emit a voice-related event."""
-    logger.debug("🎙️ Voice event emitted | type=%s session=%s", event_type.value, session_id)
     return await event_manager.emit(event_type, session_id, data, priority)
 
 
@@ -221,8 +211,6 @@ async def event_stream_generator(
     """
     queue = await event_manager.subscribe(session_id)
     
-    logger.info("📡 SSE stream started | session=%s", session_id)
-    
     try:
         if on_connect:
             await on_connect()  # Await if it's a coroutine
@@ -230,7 +218,6 @@ async def event_stream_generator(
         while True:
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=30.0)
-                logger.debug("📨 SSE event sent | type=%s session=%s", event.type.value, event.session_id)
                 # Use named event type so EventSource.addEventListener() fires correctly.
                 # Send the inner data dict directly so consumers can do
                 # JSON.parse(e.data).transcript without an extra nesting level.
@@ -242,6 +229,5 @@ async def event_stream_generator(
                 break
     finally:
         await event_manager.unsubscribe(session_id, queue)
-        logger.info("🔴 SSE stream ended | session=%s", session_id)
         if on_disconnect:
             await on_disconnect()  # Await if it's a coroutine

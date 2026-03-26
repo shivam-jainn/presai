@@ -45,7 +45,7 @@ async def ingest_ppt_route(
         )
         
         file.filename = filename
-        logger.info(f"Incoming ingest request for file: {filename}")
+        logger.info("Ingest request received | file=%s", filename)
         pipeline = IngestionPipeline()
         result = await pipeline.ingest(file, ingestion_session_id=ingestion_session_id)
 
@@ -71,7 +71,7 @@ async def ingest_ppt_route(
             {"filename": filename, "error": str(e)}
         )
         
-        logger.error(f"Ingestion route failed for {filename}: {e}")
+        logger.error("Ingestion failed | file=%s error=%s", filename, e)
         raise HTTPException(
             status_code=500,
             detail=f"An error occurred during PPT ingestion: {str(e)}"
@@ -91,8 +91,8 @@ async def get_ppt_file(filename: str):
             filename=filename
         )
     except FileNotFoundError as e:
-        logger.error(f"File not found: {filename}")
+        logger.error("File not found | file=%s", filename)
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"Error serving file {filename}: {e}")
+        logger.error("Error serving file | file=%s error=%s", filename, e)
         raise HTTPException(status_code=500, detail=str(e))

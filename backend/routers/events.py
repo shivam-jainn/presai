@@ -14,10 +14,10 @@ async def stream_events(session_id: str):
     Clients connect here to receive voice processing, ingestion, and other events.
     """
     async def on_connect():
-        logger.info(f"Client connected to event stream: {session_id}")
+        logger.info("Client connected to event stream | session=%s", session_id)
     
     async def on_disconnect():
-        logger.info(f"Client disconnected from event stream: {session_id}")
+        logger.info("Client disconnected from event stream | session=%s", session_id)
     
     return StreamingResponse(
         event_stream_generator(session_id, on_connect, on_disconnect),

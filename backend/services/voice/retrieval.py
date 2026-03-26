@@ -38,8 +38,7 @@ def _llm_json(system: str, user: str, *, max_tokens: int = 32) -> dict[str, Any]
     """
     try:
         client = _get_llm_client()
-        logger.info("   🤖 LLM call: %s", LLMConfig.MODEL)
-        logger.info("   🤖 LLM prompt: %s", user)
+        logger.info("LLM call: model=%s", LLMConfig.MODEL)
         
         resp = client.chat.completions.create(
             model=LLMConfig.MODEL,
@@ -52,10 +51,10 @@ def _llm_json(system: str, user: str, *, max_tokens: int = 32) -> dict[str, Any]
             response_format={"type": "json_object"},
         )
         raw = (resp.choices[0].message.content or "").strip()
-        logger.info(f"   🤖 LLM response: {raw}")
+        logger.info("LLM response: %s", raw)
         return json.loads(raw)
     except Exception as exc:
-        logger.warning(f"   ⚠️  LLM call failed: {exc}")
+        logger.warning("LLM call failed: %s", exc)
         return {}
 
 
@@ -82,7 +81,6 @@ def normalize_query(raw: str) -> str:
     words = raw.lower().split()
     filtered = [w.rstrip(".,!?;:") for w in words if w.rstrip(".,!?;:") not in _FILLER_WORDS]
     result = " ".join(filtered) if filtered else raw
-    logger.info(f"   🔧 Normalized: '{raw}' → '{result}'")
     return result
 
 
@@ -110,16 +108,16 @@ def _detect_command(query: str) -> bool:
 def _parse_command_slide(query: str, last_slide: int, total_slides: int) -> int | None:
     """Resolve a navigation command to an absolute 1-based slide number."""
     q = query.strip().rstrip(".,!?;:")
-    logger.info(f"   🎯 Command: '{q}' | last={last_slide} total={total_slides}")
+    logger.info("Command: '%s' | last=%d total=%d", q, last_slide, total_slides)
 
     if re.match(r"^(next|next\s+slide|next\s+one|forward|move\s+forward)$", q, re.I):
         target = min(last_slide + 1, total_slides) if total_slides else last_slide + 1
-        logger.info(f"   ➡️  NEXT → slide {target}")
+        logger.info("NEXT command → slide %d", target)
         return target
 
     if re.match(r"^(prev|previous|previous\s+slide|go\s+back|back|last\s+slide)$", q, re.I):
         target = max(last_slide - 1, 1)
-        logger.info(f"   ⬅️  PREV → slide {target}")
+        logger.info("PREV command → slide %d", target)
         return target
 
     m = re.match(
@@ -131,7 +129,7 @@ def _parse_command_slide(query: str, last_slide: int, total_slides: int) -> int 
         if total_slides:
             n = min(n, total_slides)
         n = max(n, 1)
-        logger.info(f"   🔢 GOTO → slide {n}")
+        logger.info("GOTO command → slide %d", n)
         return n
 
     return None
@@ -173,7 +171,6 @@ def _hybrid_score(vector_score: float, query_keywords: set[str], slide_text: str
 
     if meaningful_kw and (meaningful_kw & slide_words):
         boosted = vector_score * EXACT_SIMILARITY_BOOST
-        logger.debug(f"      🔑 Keyword hit {meaningful_kw & slide_words} → ×3 ({vector_score:.4f} → {boosted:.4f})")
         return boosted
 
     return vector_score * SEMANTIC_SIMILARITY
@@ -207,7 +204,7 @@ def _llm_select_slide(query: str, candidates: list[dict[str, Any]]) -> int | Non
         return None
     if len(candidates) == 1:
         sn = int(candidates[0].get("slide_number") or candidates[0].get("slide_id") or 1)
-        logger.info(f"   🤖 Single candidate — slide {sn}")
+        logger.info("Single candidate — slide %d", sn)
         return sn
 
     lines = []
@@ -221,19 +218,19 @@ def _llm_select_slide(query: str, candidates: list[dict[str, Any]]) -> int | Non
         f"Candidates:\n" + "\n".join(lines) +
         '\n\nReturn {"slide_number": <integer>}:'
     )
-    logger.info(f"   🤖 Reranker query: '{query}' over {len(candidates)} candidates")
+    logger.info("Reranker query over %d candidates", len(candidates))
 
     data   = _llm_json(_RERANK_SYSTEM, user_msg, max_tokens=32)
     chosen = data.get("slide_number")
     if chosen is not None:
         try:
             chosen = int(chosen)
-            logger.info(f"   ✅ LLM chose slide {chosen}")
+            logger.info("LLM chose slide %d", chosen)
             return chosen
         except (ValueError, TypeError):
             pass
 
-    logger.warning("   ⚠️  LLM reranker returned no valid slide_number")
+    logger.warning("LLM reranker returned no valid slide_number")
     return None
 
 
@@ -254,7 +251,7 @@ def run_voice_slide_query(
     if not raw_question:
         raise ValueError("Question cannot be empty.")
 
-    logger.info(f"🎤 Voice query: '{raw_question}' | file={filename} session={session_id}")
+    logger.info("Voice query: '%s' | file=%s session=%s", raw_question, filename, session_id or "none")
 
     # ── Session bootstrap ─────────────────────────────────────────────────
     sess_key = session_id or f"_nosession_{filename}"
@@ -266,14 +263,14 @@ def run_voice_slide_query(
     # ── Resolve total_slides ──────────────────────────────────────────────
     if total_slides is None:
         total_slides = vector_store.get_total_slides(filename, session_id)
-        logger.info(f"   📊 total_slides resolved = {total_slides}")
+        logger.info("Total slides resolved: %d", total_slides)
 
     # ── COMMAND branch (regex, no LLM) ────────────────────────────────────
     if _detect_command(raw_question):
         target = _parse_command_slide(raw_question, last_slide, total_slides)
         if target is not None:
             session["last_slide"] = target
-            logger.info(f"   ✅ COMMAND → slide {target}")
+            logger.info("COMMAND detected → slide %d", target)
             return {
                 "answer": f"Jumping to slide {target}.",
                 "recommended_slide_number": target,
@@ -298,17 +295,12 @@ def run_voice_slide_query(
     )
 
     if not db_results:
-        logger.error("   ❌ No matches in vector store")
+        logger.error("No matches in vector store")
         raise LookupError(
             "No matching slide content found. Ingest a deck first or ask a broader question."
         )
 
-    logger.info("=" * 60)
-    logger.info("📋 DB results:")
-    for i, r in enumerate(db_results, 1):
-        sn = int(r.get("slide_number") or r.get("slide_id") or 0)
-        logger.info(f"  [{i}] Slide {sn} | score={r.get('score', 0.0):.4f} | {str(r.get('text', ''))[:80]}")
-    logger.info("=" * 60)
+    logger.info("DB results: %d slides retrieved", len(db_results))
 
     # Step 3: hybrid scoring
     # keywords = union of raw + normalised so nothing meaningful is dropped
@@ -324,9 +316,7 @@ def run_voice_slide_query(
     # Step 4: top_k by hybrid score
     top_k_results = sorted(db_results, key=lambda r: r["_hybrid_score"], reverse=True)[:top_k]
 
-    logger.info(f"   📊 Top-{top_k} by hybrid score:")
-    for c in top_k_results:
-        logger.info(f"      Slide {c.get('slide_number')} | hybrid={c['_hybrid_score']:.4f}")
+    logger.info("Top %d by hybrid score", top_k)
 
     # Step 5: LLM reranker → {"slide_number": int}
     chosen_number = _llm_select_slide(normalised_query, top_k_results)
@@ -342,7 +332,7 @@ def run_voice_slide_query(
     recommended_slide_index  = max(recommended_slide_number - 1, 0)
     session["last_slide"]    = recommended_slide_number
 
-    logger.info(f"   🎯 FINAL → slide {recommended_slide_number}")
+    logger.info("Final selection → slide %d", recommended_slide_number)
 
     return {
         "answer": f"Jumping to slide {recommended_slide_number}.",

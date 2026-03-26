@@ -96,13 +96,6 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
     Note: Each call creates a new participant identity for the same room.
     LiveKit will automatically manage job spawning when participants join.
     """
-    logger.info("\n" + "="*80)
-    logger.info(f"🎫 TOKEN REQUEST RECEIVED")
-    logger.info(f"   Filename: {payload.filename}")
-    logger.info(f"   Session ID: {payload.session_id}")
-    logger.info(f"   VOICE_MODE: {VoiceConfig.MODE}")
-    logger.info(f"   LIVEKIT_URL: {VoiceConfig.LIVEKIT_URL}")
-    logger.info(f"{'='*80}")
     
     # Support both modes - local uses local LiveKit server, agentkit_live uses cloud
     if VoiceConfig.MODE == "agentkit_live":
@@ -140,9 +133,7 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
     api_key = VoiceConfig.LIVEKIT_API_KEY or "devkey"
     api_secret = VoiceConfig.LIVEKIT_API_SECRET or "devsecretdevsecretdevsecretdevsec"
 
-    logger.info(f"📝 Generating token for room: {room_name}, identity: {identity}")
-    logger.debug(f"   Metadata: {metadata}")
-    logger.debug(f"   Attributes: filename={filename}, session_id={payload.session_id or ''}, role=ui_client")
+    logger.info("Generating LiveKit token | room=%s identity=%s", room_name, identity)
 
     token = (
         livekit_api.AccessToken(api_key, api_secret)
@@ -169,9 +160,8 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
         .to_jwt()
     )
 
-    logger.info(f"✅ Token generated successfully")
-    logger.debug(f"   Token TTL: {VoiceConfig.LIVEKIT_TOKEN_TTL_SECONDS}s")
-    logger.debug(f"   Room prefix: {VoiceConfig.LIVEKIT_ROOM_PREFIX}")
+    logger.info("LiveKit token generated successfully | ttl=%ds prefix=%s", 
+                VoiceConfig.LIVEKIT_TOKEN_TTL_SECONDS, VoiceConfig.LIVEKIT_ROOM_PREFIX)
     
     # Emit voice start event (non-blocking, don't wait)
     asyncio.create_task(
@@ -185,8 +175,6 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
             }
         )
     )
-
-    logger.info(f"{'='*80}\n")
 
     return VoiceLivekitTokenResponse(
         token=token,
@@ -202,15 +190,11 @@ async def transcribe_voice_audio(file: UploadFile = File(...)):
     Transcribe audio file using local Whisper model.
     Only available in 'local' mode.
     """
-    logger.info("\n" + "="*80)
-    logger.info("🎤 TRANSCRIBE API CALLED")
-    logger.info(f"   Filename: {file.filename}")
-    logger.info(f"   Content-Type: {file.content_type}")
-    logger.info(f"   VOICE_MODE: {VoiceConfig.MODE}")
-    logger.info(f"{'='*80}")
+    logger.info("Transcribe API called | filename=%s content_type=%s mode=%s", 
+                file.filename, file.content_type, VoiceConfig.MODE)
     
     if VoiceConfig.MODE != "local":
-        logger.error("❌ Transcription disabled - VOICE_MODE=%s", VoiceConfig.MODE)
+        logger.error("Transcription disabled - VOICE_MODE=%s", VoiceConfig.MODE)
         raise HTTPException(
             status_code=409,
             detail="Voice transcription is disabled in current mode. Use agentkit_live runtime for production.",
@@ -223,25 +207,24 @@ async def transcribe_voice_audio(file: UploadFile = File(...)):
 
     try:
         raw_bytes = await file.read()
-        logger.info(f"📥 Audio file read | size={len(raw_bytes)} bytes")
+        logger.info("Audio file read | size=%d bytes", len(raw_bytes))
         
         if not raw_bytes:
-            logger.error("❌ Audio payload is empty")
+            logger.error("Audio payload is empty")
             raise HTTPException(status_code=400, detail="Audio payload is empty.")
 
-        logger.info("🎙️ Starting transcription with Faster-Whisper...")
+        logger.info("Starting transcription with Faster-Whisper...")
         transcript = local_whisper_transcriber.transcribe_file_bytes(raw_bytes, file_name=file_name)
         
         if not transcript:
-            logger.error("❌ No speech detected in audio")
+            logger.error("No speech detected in audio")
             raise HTTPException(status_code=422, detail="Unable to detect speech in audio.")
         
-        logger.info("✅ Transcription successful: %r", transcript[:100] if len(transcript) > 100 else transcript)
-        logger.info(f"{'='*80}\n")
+        logger.info("Transcription successful | length=%d chars", len(transcript))
 
         return VoiceTranscribeResponse(transcript=transcript, mode=VoiceConfig.MODE)
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("❌ Transcription failed with exception: %s", e)
+        logger.exception("Transcription failed | exception=%s", e)
         raise HTTPException(status_code=500, detail=f"Voice transcription failed: {str(e)}")

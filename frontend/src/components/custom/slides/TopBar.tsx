@@ -1,10 +1,12 @@
 import { motion } from "motion/react";
 import { Upload, X, FileText, Sun, Moon } from "lucide-react";
 import { useSlideStore } from "../../../lib/store";
+import { useAuth } from "../../../contexts/AuthContext";
 import { useEffect } from "react";
 
 export default function TopBar() {
   const { fileName, requestUploadPicker, theme, setTheme } = useSlideStore();
+  const { signOut } = useAuth();
 
   // Apply theme class on mount
   useEffect(() => {
@@ -74,8 +76,9 @@ export default function TopBar() {
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
+          onClick={signOut}
           className="flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200"
-          aria-label="Exit"
+          aria-label="Sign out"
         >
           <X className="w-4 h-4" />
         </motion.button>

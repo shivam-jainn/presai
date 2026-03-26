@@ -17,7 +17,7 @@ def get_logger(name: str):
         logger.addHandler(console_handler)
         
         if debug_mode:
-            logger.info("🔍 Debug mode enabled via PRESAI_DEBUG environment variable")
+            logger.info("Debug mode enabled via PRESAI_DEBUG environment variable")
     return logger
 
 logger = get_logger("presai")

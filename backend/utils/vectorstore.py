@@ -49,22 +49,23 @@ class VectorStore:
                         current_size = None
                         
                     if current_size is not None and current_size != self.vector_size:
-                        logger.warning(f"Collection '{self.collection_name}' has wrong dimension (expected {self.vector_size}, got {current_size}). Recreating...")
+                        logger.warning("Collection '%s' has wrong dimension (expected %d, got %d). Recreating...", 
+                                     self.collection_name, self.vector_size, current_size)
                         self.client.delete_collection(self.collection_name)
                         self.client.create_collection(
                             collection_name=self.collection_name,
                             vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE),
                         )
                 except Exception as e:
-                    logger.warning(f"Could not check collection dimensions: {e}")
+                    logger.warning("Could not check collection dimensions: %s", e)
             else:
-                logger.info(f"Creating Qdrant collection: {self.collection_name}")
+                logger.info("Creating Qdrant collection: %s", self.collection_name)
                 self.client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE),
                 )
         except Exception as e:
-            logger.error(f"Error ensuring collection exists: {e}")
+            logger.error("Error ensuring collection exists: %s", e)
             raise
 
     def upsert_embeddings(self, ids: List[str], vectors: List[List[float]], payloads: List[Dict[str, Any]]):
@@ -80,7 +81,7 @@ class VectorStore:
                 payload=payloads[i]
             ))
 
-        logger.info(f"Upserting {len(points)} points into Qdrant collection '{self.collection_name}'...")
+        logger.info("Upserting %d points into Qdrant collection '%s'...", len(points), self.collection_name)
         self.client.upsert(
             collection_name=self.collection_name,
             points=points
@@ -97,12 +98,12 @@ class VectorStore:
         if not query_vector:
             return []
 
-        logger.info(f"🔍 VectorStore search:")
-        logger.info(f"   Collection: {self.collection_name}")
-        logger.info(f"   Query vector size: {len(query_vector)}")
-        logger.info(f"   Limit: {limit}")
-        logger.info(f"   Filename filter: {filename}")
-        logger.info(f"   Session ID filter: {session_id}")
+        logger.info("VectorStore search:")
+        logger.info("   Collection: %s", self.collection_name)
+        logger.info("   Query vector size: %d", len(query_vector))
+        logger.info("   Limit: %d", limit)
+        logger.info("   Filename filter: %s", filename)
+        logger.info("   Session ID filter: %s", session_id)
 
         search_filter = None
         filter_conditions: List[Condition] = []
@@ -123,9 +124,9 @@ class VectorStore:
 
         if filter_conditions:
             search_filter = Filter(must=filter_conditions)
-            logger.info(f"   Filter conditions: {[f.key for f in filter_conditions]}")
+            logger.info("Filter conditions: %s", [f.key for f in filter_conditions])
         else:
-            logger.warning("⚠️  NO FILTER CONDITIONS - searching entire database!")
+            logger.warning("NO FILTER CONDITIONS - searching entire database!")
 
         results = self.client.query_points(
             collection_name=self.collection_name,
@@ -191,10 +192,10 @@ class VectorStore:
                 except (ValueError, TypeError):
                     continue
 
-            logger.info(f"📊 Total slides for {filename}: {max_slide}")
+            logger.info("Total slides for %s: %d", filename, max_slide)
             return max_slide
         except Exception as e:
-            logger.error(f"Failed to get total slides for {filename}: {e}")
+            logger.error("Failed to get total slides for %s: %s", filename, e)
             return 0
 
 vector_store = VectorStore()
