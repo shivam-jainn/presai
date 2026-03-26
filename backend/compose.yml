@@ -1,6 +1,6 @@
 services:
   vectordb:
-    image: "qdrant/qdrant:v1.3.0"
+    image: "qdrant/qdrant:latest"
     container_name: "vectordb"
     ports:
       - "6333:6333"

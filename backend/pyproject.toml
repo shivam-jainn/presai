@@ -6,12 +6,21 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.135.2",
+    "langchain>=1.2.13",
+    "langchain-community>=0.4.1",
+    "langchain-groq>=1.1.2",
+    "langchain-ollama>=1.0.1",
+    "langchain-openai>=1.1.12",
     "livekit-agents[groq,openai]~=1.4",
     "livekit-api>=1.1.0",
     "numpy>=2.4.3",
     "openai>=2.29.0",
     "pydantic>=2.12.5",
+    "python-dotenv>=1.2.2",
+    "python-multipart>=0.0.22",
     "python-pptx>=1.0.2",
+    "qdrant-client>=1.17.1",
     "scikit-learn>=1.8.0",
+    "unstructured[ppt,pptx]>=0.21.5",
     "uvicorn>=0.42.0",
 ]
