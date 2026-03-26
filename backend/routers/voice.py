@@ -39,7 +39,12 @@ class VoiceTranscribeResponse(BaseModel):
 
 class VoiceLivekitTokenRequest(BaseModel):
     filename: str = Field(min_length=1)
+    # session_id becomes the LiveKit room key — fresh per connection so a new room
+    # (and therefore a new agent job) is always created on reconnect.
     session_id: str | None = None
+    # query_session_id is the stable frontend voiceSessionId used to filter the
+    # vector store.  Must match the session_id used during ingestion.
+    query_session_id: str | None = None
 
 
 class VoiceLivekitTokenResponse(BaseModel):
@@ -124,16 +129,21 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
     room_name = f"{VoiceConfig.LIVEKIT_ROOM_PREFIX}-{safe_room_key}".strip("-")
     identity = f"presai-ui-{uuid4().hex[:12]}"
 
+    # Stable session ID used for vector-store queries (must match ingestion session).
+    # Falls back to the room key when not provided (backwards-compatible).
+    effective_query_session_id = payload.query_session_id or payload.session_id or ""
+
     metadata = {
         "filename": filename,
-        "session_id": payload.session_id or "",
+        "session_id": effective_query_session_id,
     }
 
     # For local mode, use dev credentials if available
     api_key = VoiceConfig.LIVEKIT_API_KEY or "devkey"
     api_secret = VoiceConfig.LIVEKIT_API_SECRET or "devsecretdevsecretdevsecretdevsec"
 
-    logger.info("Generating LiveKit token | room=%s identity=%s", room_name, identity)
+    logger.info("Generating LiveKit token | room=%s identity=%s query_session=%s",
+                room_name, identity, effective_query_session_id)
 
     token = (
         livekit_api.AccessToken(api_key, api_secret)
@@ -152,7 +162,8 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
         .with_attributes(
             {
                 "filename": filename,
-                "session_id": payload.session_id or "",
+                # Worker reads this attribute for vector-store queries.
+                "session_id": effective_query_session_id,
                 "role": "ui_client",
             }
         )
@@ -163,7 +174,7 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
     logger.info("LiveKit token generated successfully | ttl=%ds prefix=%s", 
                 VoiceConfig.LIVEKIT_TOKEN_TTL_SECONDS, VoiceConfig.LIVEKIT_ROOM_PREFIX)
     
-    # Emit voice start event (non-blocking, don't wait)
+    # Emit voice start event on the room-derived channel (matches what the worker uses).
     asyncio.create_task(
         emit_voice_event(
             EventType.VOICE_START,

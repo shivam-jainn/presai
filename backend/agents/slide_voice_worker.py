@@ -121,9 +121,11 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 
     def _on_participant_disconnected(remote: rtc.RemoteParticipant) -> None:
         logger.info(
-            "Participant disconnected | identity=%s (worker remains alive for reconnection)",
+            "Participant disconnected | identity=%s — shutting down worker so a fresh one is "
+            "dispatched on reconnect (avoids stale STT session)",
             remote.identity,
         )
+        ctx.shutdown("participant disconnected")
 
     ctx.room.on("participant_connected", _on_participant_connected)
     ctx.room.on("participant_disconnected", _on_participant_disconnected)

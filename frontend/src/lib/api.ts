@@ -219,13 +219,16 @@ export const transcribeVoiceAudio = async (
 
 export const getVoiceLivekitToken = async (
   filename: string,
-  sessionId?: string | null
+  sessionId?: string | null,
+  querySessionId?: string | null,
 ): Promise<VoiceLivekitTokenResult> => {
   const response = await apiClient.post<VoiceLivekitTokenResult>(
     "/voice/livekit/token",
     {
       filename,
       session_id: sessionId || undefined,
+      // Stable ID used by the worker for vector-store queries (matches ingestion).
+      query_session_id: querySessionId || undefined,
     },
     {
       headers: {

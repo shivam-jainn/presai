@@ -44,14 +44,17 @@ export function useLiveKitVoice(): UseLiveKitVoiceReturn {
 
   const roomRef = useRef<Room | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  // Fresh UUID generated on every start() so each connection uses a unique
+  // LiveKit room name, guaranteeing a new agent job is dispatched.
+  const connIdRef = useRef<string>("");
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [voiceStatus, setVoiceStatus] = useState<string>("");
 
 
-  const openEventStream = useCallback(() => {
-    const url = `${API_CONFIG.baseURL}/events/${voiceSessionId}`;
+  const openEventStream = useCallback((sessionId: string) => {
+    const url = `${API_CONFIG.baseURL}/events/${sessionId}`;
     const es = new EventSource(url);
     eventSourceRef.current = es;
 
@@ -94,7 +97,6 @@ export function useLiveKitVoice(): UseLiveKitVoiceReturn {
       setVoiceStatus("");
     });
   }, [
-    voiceSessionId,
     setLiveTranscript,
     setTranscribing,
     setVoiceThinking,
@@ -223,12 +225,16 @@ export function useLiveKitVoice(): UseLiveKitVoiceReturn {
     setLiveTranscript("");
     setTranscribing(false);
     setVoiceStatus("");
+    // Reset turn counter so a fresh worker's turns (starting at 1) are never
+    // filtered out by the stale-turn-id guard.
+    setLatestVoiceTurnId(0);
   }, [
     closeEventStream,
     setListening,
     setVoiceThinking,
     setLiveTranscript,
     setTranscribing,
+    setLatestVoiceTurnId,
   ]);
 
   const start = useCallback(async () => {
@@ -244,10 +250,17 @@ export function useLiveKitVoice(): UseLiveKitVoiceReturn {
     setLastVoiceQuestion(null);
     setLastVoiceMessage("Connecting…");
 
-    try {
-      openEventStream();
+    // Fresh connection ID → unique room name → LiveKit always dispatches a new
+    // agent job, even if the previous room still lingers on the server.
+    const connId = crypto.randomUUID();
+    connIdRef.current = connId;
 
-      const tokenResult = await getVoiceLivekitToken(fileName, voiceSessionId);
+    try {
+      openEventStream(connId);
+
+      // session_id = connId (room key, fresh per connect)
+      // query_session_id = voiceSessionId (stable, matches ingestion)
+      const tokenResult = await getVoiceLivekitToken(fileName, connId, voiceSessionId);
 
       const room = new Room({ adaptiveStream: false, dynacast: false });
       roomRef.current = room;
