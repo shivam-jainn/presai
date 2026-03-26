@@ -117,16 +117,18 @@ class VectorStore:
         if filter_conditions:
             search_filter = Filter(must=filter_conditions)
 
-        results = self.client.search(  # type: ignore[attr-defined]
+        results = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=search_filter,
             limit=limit,
             with_payload=True,
         )
+        # query_points returns a PointsList object, need to extract points
+        scored_points = getattr(results, 'points', []) if hasattr(results, 'points') else results
 
         formatted_results: List[Dict[str, Any]] = []
-        for result in cast(List[Any], results):
+        for result in cast(List[Any], scored_points):
             payload = dict(getattr(result, "payload", {}) or {})
             formatted_results.append(
                 {

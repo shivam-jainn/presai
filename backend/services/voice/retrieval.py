@@ -5,6 +5,13 @@ from utils.embeddings import EmbeddingService
 from utils.vectorstore import vector_store
 
 
+def _compact_snippet(text: str, *, max_len: int = 220) -> str:
+    cleaned = " ".join((text or "").split())
+    if len(cleaned) <= max_len:
+        return cleaned
+    return cleaned[: max_len - 1].rstrip() + "…"
+
+
 def run_voice_slide_query(
     question: str,
     *,
@@ -38,8 +45,22 @@ def run_voice_slide_query(
     recommended_slide_number = max(slide_scores.items(), key=lambda item: item[1])[0]
     recommended_slide_index = max(recommended_slide_number - 1, 0)
 
+    # Create a grounded answer from retrieved slide text (no LLM required).
+    # Prefer chunks that belong to the recommended slide.
+    slide_matches = [
+        m
+        for m in matches
+        if int(m.get("slide_number") or m.get("slide_id") or 0) == recommended_slide_number
+    ]
+    best = (slide_matches or matches)[:2]
+    snippets = [_compact_snippet(str(m.get("text") or "")) for m in best if (m.get("text") or "").strip()]
+    if snippets:
+        answer = f"Jumping to slide {recommended_slide_number}. Key points: " + " • ".join(snippets)
+    else:
+        answer = f"Jumping to slide {recommended_slide_number}."
+
     return {
-        "answer": "hmmm thinking about this one, give me a second let me go through the page, ahh found it.",
+        "answer": answer,
         "recommended_slide_number": recommended_slide_number,
         "recommended_slide_index": recommended_slide_index,
         "retrieval": matches,

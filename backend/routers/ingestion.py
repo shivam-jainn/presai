@@ -1,16 +1,17 @@
-from typing import Any
+from typing import Any, AsyncGenerator
 import json
 from pathlib import Path
 from datetime import timedelta
 from uuid import uuid4
-from fastapi import APIRouter, File, UploadFile, HTTPException, Request, Form
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, File, UploadFile, HTTPException, Request, Form, Query
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from livekit import api as livekit_api
 from config.voice import VoiceConfig
 from services.ingestion.pipeline import IngestionPipeline
 from services.voice.retrieval import run_voice_slide_query
 from services.voice.transcriber import local_whisper_transcriber
+from services.events import event_manager, EventType, emit_voice_event, emit_ingestion_event, event_stream_generator
 from utils.logger import logger
 from utils.storage import storage
 
@@ -47,6 +48,29 @@ class VoiceLivekitTokenResponse(BaseModel):
     room_name: str
     identity: str
 
+@router.get("/events/{session_id}")
+async def stream_events(session_id: str):
+    """
+    Server-Sent Events endpoint for real-time progress updates.
+    Clients connect here to receive voice processing, ingestion, and other events.
+    """
+    async def on_connect():
+        logger.info(f"Client connected to event stream: {session_id}")
+    
+    async def on_disconnect():
+        logger.info(f"Client disconnected from event stream: {session_id}")
+    
+    return StreamingResponse(
+        event_stream_generator(session_id, on_connect, on_disconnect),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.post("/ingest")
 async def ingest_ppt_route(request: Request, file: UploadFile = File(...), session_id: str | None = Form(None)):
     filename = Path(file.filename or "").name
@@ -61,15 +85,44 @@ async def ingest_ppt_route(request: Request, file: UploadFile = File(...), sessi
             detail=f"Unsupported file type: {filename}. Only PPT/PPTX files are allowed."
         )
     
+    # Use provided session_id or generate a new one
+    ingestion_session_id = session_id or str(uuid4())
+    
     try:
+        # Emit ingestion start event
+        await emit_ingestion_event(
+            EventType.INGESTION_START,
+            ingestion_session_id,
+            {"filename": filename, "status": "started"}
+        )
+        
         file.filename = filename
         logger.info(f"Incoming ingest request for file: {filename}")
         pipeline = IngestionPipeline()
-        result = await pipeline.ingest(file, ingestion_session_id=session_id)
+        result = await pipeline.ingest(file, ingestion_session_id=ingestion_session_id)
+
+        # Emit ingestion complete event
+        await emit_ingestion_event(
+            EventType.INGESTION_COMPLETE,
+            ingestion_session_id,
+            {
+                "filename": filename,
+                "status": "completed",
+                "total_slides": result.get("total_slides", 0),
+            }
+        )
 
         result["file_url"] = str(request.url_for("get_ppt_file", filename=result["filename"]))
+        result["session_id"] = ingestion_session_id
         return result
     except Exception as e:
+        # Emit ingestion error event
+        await emit_ingestion_event(
+            EventType.INGESTION_ERROR,
+            ingestion_session_id,
+            {"filename": filename, "error": str(e)}
+        )
+        
         logger.error(f"Ingestion route failed for {filename}: {e}")
         raise HTTPException(
             status_code=500,
@@ -127,16 +180,30 @@ async def query_voice_navigation(payload: VoiceQueryRequest):
 
 @router.post("/voice/livekit/token", response_model=VoiceLivekitTokenResponse)
 async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
-    if VoiceConfig.MODE != "agentkit_live":
+    """
+    Generate LiveKit token for voice room connection.
+    Works in both 'local' and 'agentkit_live' modes.
+    In 'local' mode, connects to local LiveKit server for STT processing.
+    """
+    # Support both modes - local uses local LiveKit server, agentkit_live uses cloud
+    if VoiceConfig.MODE == "agentkit_live":
+        # Cloud mode - requires full LiveKit credentials
+        if not (VoiceConfig.LIVEKIT_URL and VoiceConfig.LIVEKIT_API_KEY and VoiceConfig.LIVEKIT_API_SECRET):
+            raise HTTPException(
+                status_code=500,
+                detail="LiveKit credentials are not configured on the server.",
+            )
+    elif VoiceConfig.MODE == "local":
+        # Local mode - can use dev credentials or local server
+        if not VoiceConfig.LIVEKIT_URL:
+            raise HTTPException(
+                status_code=500,
+                detail="Local LiveKit server URL not configured.",
+            )
+    else:
         raise HTTPException(
-            status_code=409,
-            detail="LiveKit token endpoint is available only when VOICE_MODE=agentkit_live.",
-        )
-
-    if not (VoiceConfig.LIVEKIT_URL and VoiceConfig.LIVEKIT_API_KEY and VoiceConfig.LIVEKIT_API_SECRET):
-        raise HTTPException(
-            status_code=500,
-            detail="LiveKit credentials are not configured on the server.",
+            status_code=400,
+            detail=f"Invalid VOICE_MODE: {VoiceConfig.MODE}. Must be 'local' or 'agentkit_live'.",
         )
 
     filename = Path(payload.filename).name
@@ -150,8 +217,12 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
         "session_id": payload.session_id or "",
     }
 
+    # For local mode, use dev credentials if available
+    api_key = VoiceConfig.LIVEKIT_API_KEY or "devkey"
+    api_secret = VoiceConfig.LIVEKIT_API_SECRET or "devsecretdevsecretdevsecretdevsec"
+
     token = (
-        livekit_api.AccessToken(VoiceConfig.LIVEKIT_API_KEY, VoiceConfig.LIVEKIT_API_SECRET)
+        livekit_api.AccessToken(api_key, api_secret)
         .with_identity(identity)
         .with_name("PresAI UI")
         .with_grants(
@@ -173,6 +244,17 @@ async def get_voice_livekit_token(payload: VoiceLivekitTokenRequest):
         )
         .with_ttl(timedelta(seconds=VoiceConfig.LIVEKIT_TOKEN_TTL_SECONDS))
         .to_jwt()
+    )
+
+    # Emit voice start event
+    await emit_voice_event(
+        EventType.VOICE_START,
+        payload.session_id or room_name,
+        {
+            "room_name": room_name,
+            "identity": identity,
+            "mode": VoiceConfig.MODE,
+        }
     )
 
     return VoiceLivekitTokenResponse(

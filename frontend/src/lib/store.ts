@@ -17,6 +17,10 @@ interface SlideState {
   
   // Voice AI state
   isListening: boolean;
+  latestVoiceTurnId: number;
+  isVoiceThinking: boolean;
+  lastVoiceQuestion: string | null;
+  lastVoiceMessage: string | null;
   
   // Slide navigation
   currentSlide: number;
@@ -31,7 +35,11 @@ interface SlideState {
   setIngesting: (ingesting: boolean) => void;
   setIngestionStatus: (status: IngestionStatus, error?: string) => void;
   setListening: (listening: boolean) => void;
-  setCurrentSlide: (slide: number) => void;
+  setLatestVoiceTurnId: (turnId: number) => void;
+  setVoiceThinking: (thinking: boolean) => void;
+  setLastVoiceQuestion: (question: string | null) => void;
+  setLastVoiceMessage: (message: string | null) => void;
+  setCurrentSlide: (slide: number | ((prev: number) => number)) => void;
   setTotalSlides: (total: number) => void;
   setSlideContent: (content: Record<number, string[]>) => void;
   reset: () => void;
@@ -47,6 +55,10 @@ const initialState = {
   ingestionStatus: "idle" as IngestionStatus,
   ingestionError: null,
   isListening: false,
+  latestVoiceTurnId: 0,
+  isVoiceThinking: false,
+  lastVoiceQuestion: null,
+  lastVoiceMessage: null,
   currentSlide: 0,
   totalSlides: 0,
   slideContent: {},
@@ -79,9 +91,23 @@ export const useSlideStore = create<SlideState>((set) => ({
   
   setListening: (listening) =>
     set({ isListening: listening }),
+
+  setLatestVoiceTurnId: (turnId) =>
+    set({ latestVoiceTurnId: Math.max(0, turnId) }),
+
+  setVoiceThinking: (thinking) =>
+    set({ isVoiceThinking: thinking }),
+
+  setLastVoiceQuestion: (question) =>
+    set({ lastVoiceQuestion: question }),
+
+  setLastVoiceMessage: (message) =>
+    set({ lastVoiceMessage: message }),
   
   setCurrentSlide: (slide) =>
-    set({ currentSlide: slide }),
+    set((state) => ({
+      currentSlide: typeof slide === "function" ? slide(state.currentSlide) : slide,
+    })),
   
   setTotalSlides: (total) =>
     set({ totalSlides: total }),

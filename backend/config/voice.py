@@ -1,11 +1,15 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 class VoiceConfig:
     MODE = os.getenv("VOICE_MODE", "local").lower()  # local | agentkit_live
+    
+    # API Keys for different services
+    DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
     # LiveKit / AgentKit runtime settings
     LIVEKIT_URL = os.getenv("LIVEKIT_URL", "")

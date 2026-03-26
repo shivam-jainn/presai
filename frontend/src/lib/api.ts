@@ -80,9 +80,6 @@ const createApiClient = (): AxiosInstance => {
   // Request interceptor for logging
   client.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-      if (import.meta.env.DEV) {
-        console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
-      }
       return config;
     },
     (error: AxiosError) => {
@@ -94,9 +91,6 @@ const createApiClient = (): AxiosInstance => {
   // Response interceptor for error handling
   client.interceptors.response.use(
     (response) => {
-      if (import.meta.env.DEV) {
-        console.log(`[API] Response ${response.status}:`, response.data);
-      }
       return response;
     },
     (error: AxiosError) => {
